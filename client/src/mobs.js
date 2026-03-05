@@ -48,8 +48,8 @@ const tankMobMaterial = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.2,
   roughness: 0.6,
 });
-const bonusFrameGeometry = new THREE.BoxGeometry(1.3, 1.3, 1.3);
-const bonusWallGeometry = new THREE.BoxGeometry(1.9, 1.5, 0.35);
+const bonusFrameGeometry = new THREE.BoxGeometry(3.8, 3.8, 3.8);
+const bonusWallGeometry = new THREE.BoxGeometry(4.2, 3.4, 0.45);
 const bonusFrameMaterials = {
   rapid: new THREE.MeshBasicMaterial({ color: 0x4dd6ff, wireframe: true }),
   shooter: new THREE.MeshBasicMaterial({ color: 0xffcc44, wireframe: true }),
@@ -104,6 +104,52 @@ function getBonusWallHits() {
   return Math.min(BONUS_WALL_BASE_HITS + bonusTier, BONUS_WALL_MAX_HITS);
 }
 
+function createBonusHitIndicator() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(2.0, 0.8, 1);
+
+  function update(hits) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(8, 12, 18, 0.78)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+    ctx.fillStyle = '#e6f0ff';
+    ctx.font = 'bold 46px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`HITS: ${Math.max(hits, 0)}`, canvas.width / 2, canvas.height / 2);
+    texture.needsUpdate = true;
+  }
+
+  sprite.userData.disposeLabel = () => {
+    texture.dispose();
+    material.dispose();
+  };
+
+  return { sprite, update };
+}
+
+function updateBonusHitIndicators(mob) {
+  if (mob.type !== 'bonus' || !mob.hitIndicatorUpdaters) return;
+  for (const update of mob.hitIndicatorUpdaters) {
+    update(mob.hp);
+  }
+}
+
 function getMobType() {
   const r = Math.random();
   const minutesElapsed = elapsedTime / 60000;
@@ -129,12 +175,36 @@ function spawnMob(scene, balanceFactor) {
     const group = new THREE.Group();
     group.add(frame);
     group.add(wall);
+
+    const wallLabel = createBonusHitIndicator();
+    wallLabel.sprite.position.set(0, 1.2, 0.9);
+    group.add(wallLabel.sprite);
+
+    const frameLabel = createBonusHitIndicator();
+    frameLabel.sprite.position.set(0, 2.35, -0.2);
+    group.add(frameLabel.sprite);
+
     mesh = group;
 
     hp = getBonusWallHits();
     speed = getMobSpeed() * (1.0 + (balanceFactor - 1) * 0.2);
-    radius = 1.0;
+    radius = 2.0;
     bonusFramesSpawned++;
+
+    const indicatorUpdaters = [wallLabel.update, frameLabel.update];
+    for (const update of indicatorUpdaters) update(hp);
+    activeMobs.push({
+      mesh,
+      type,
+      hp,
+      speed,
+      radius,
+      bonusKind,
+      scored: false,
+      hitIndicatorUpdaters: indicatorUpdaters,
+    });
+    mobsSpawnedTotal++;
+    return;
   } else if (type === 'tank') {
     const geo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
     mesh = new THREE.Mesh(geo, tankMobMaterial);
@@ -217,6 +287,9 @@ export function checkMobUnitCollisions(scene, units, onMobKilled) {
       const hitDist = mob.radius + 0.3;
       if (distSq < hitDist * hitDist) {
         mob.hp--;
+        if (mob.type === 'bonus') {
+          updateBonusHitIndicators(mob);
+        }
         if (!unit.pierceAll) {
           unit.scored = true;
           toRemoveUnits.push(unit);
@@ -308,6 +381,9 @@ function disposeMobVisual(root) {
   if (!root) return;
   if (root.isGroup) {
     for (const child of root.children) {
+      if (typeof child.userData.disposeLabel === 'function') {
+        child.userData.disposeLabel();
+      }
       if (child.geometry && child.geometry !== bonusFrameGeometry && child.geometry !== bonusWallGeometry) {
         child.geometry.dispose();
       }
