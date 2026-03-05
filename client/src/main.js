@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { initPhysics, stepPhysics, getWorld, createStaticBody } from './physics.js';
-import { initUI, updateScoreHUD, updateLivesHUD, showGameOver } from './ui.js';
+import { initUI, updateScoreHUD, updateLivesHUD, updateLevelHUD, updatePowerupsHUD, showGameOver } from './ui.js';
 import { sendScore } from './network.js';
 import {
   createCannon,
@@ -8,8 +8,10 @@ import {
   updateCannon,
   activateRapidFire,
   activatePiercingBonus,
-  increaseShooterCount,
-  getShooterCount,
+  activateDoubleShotBonus,
+  activateTripleShotBonus,
+  setLevelFireRateBoost,
+  getActivePowerups,
   getPlayerShotRate,
 } from './cannon.js';
 import { createEnemyBase, getEndZoneZ } from './enemies.js';
@@ -24,7 +26,9 @@ import {
 
 let scene, camera, renderer;
 let score = 0;
-let lives = 20;
+let lives = 5;
+let currentLevel = 1;
+const MAX_LIVES = 10;
 let gameRunning = false;
 const roadMarkings = [];
 let roadScrollMinZ = -19;
@@ -41,9 +45,13 @@ async function startGame(username) {
     await initPhysics();
 
     score = 0;
-    lives = 20;
+    lives = 5;
+    currentLevel = 1;
     updateScoreHUD(score);
     updateLivesHUD(lives);
+    updateLevelHUD(currentLevel, getNextLevelScore(currentLevel));
+    setLevelFireRateBoost(currentLevel);
+    updatePowerupsHUD([]);
 
     initScene();
     buildLane();
@@ -144,13 +152,7 @@ function buildLane() {
   // Physics body for full lane floor
   createStaticBody(getWorld(), { x: 0, y: -0.1, z: -4 }, { x: halfWidth, y: 0.1, z: laneLength / 2 });
 
-  // Center divider line
-  const divGeo = new THREE.PlaneGeometry(0.08, laneLength);
-  const divMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
-  const divider = new THREE.Mesh(divGeo, divMat);
-  divider.rotation.x = -Math.PI / 2;
-  divider.position.set(0, 0.02, -4);
-  scene.add(divider);
+  // Keep center lane visually clear so shots have no perceived obstruction.
 
   // Side labels near the cannon end
   addLaneLabel(scene, 'HORDE', -4.0, 10, '#e94560');
@@ -242,9 +244,7 @@ function checkScoring() {
     const pos = unit.body.translation();
     if (pos.z <= scoreZ) {
       unit.scored = true;
-      score += unit.type === 'tank' ? 10 : 1;
-      updateScoreHUD(score);
-      sendScore(score);
+      addScore(unit.type === 'tank' ? 10 : 1);
 
       setTimeout(() => removeUnit(scene, unit), 300);
     }
@@ -255,14 +255,30 @@ function processMobCollisions() {
   const units = getActiveUnits();
 
   const { toRemoveUnits, toRemoveMobs } = checkMobUnitCollisions(scene, units, (mob) => {
+    if (mob.type === 'heart') {
+      lives = Math.min(lives + 1, MAX_LIVES);
+      updateLivesHUD(lives);
+    }
+
     if (mob.type === 'bonus') {
       applyBonusEffect(mob.bonusKind);
     }
 
-    const points = mob.type === 'tank' ? 5 : mob.type === 'fast' ? 2 : mob.type === 'bonus' ? 8 : 1;
-    score += points;
-    updateScoreHUD(score);
-    sendScore(score);
+    const points =
+      mob.type === 'heart'
+        ? 0
+        : mob.type === 'boss'
+          ? 50
+          : mob.type === 'heavy'
+            ? 20
+            : mob.type === 'tank'
+              ? 5
+              : mob.type === 'fast'
+                ? 2
+                : mob.type === 'bonus'
+                  ? 8
+                  : 1;
+    addScore(points);
   });
 
   for (const unit of toRemoveUnits) {
@@ -276,8 +292,12 @@ function processMobCollisions() {
 function processMobsAtBase() {
   const reached = checkMobsReachedBase();
   for (const mob of reached) {
-    if (mob.type !== 'bonus') {
-      lives--;
+    if (mob.type === 'heart') {
+      lives = Math.min(lives + 1, MAX_LIVES);
+      updateLivesHUD(lives);
+    } else if (mob.type !== 'bonus') {
+      const damage = mob.type === 'boss' ? 3 : mob.type === 'heavy' ? 2 : 1;
+      lives -= damage;
       updateLivesHUD(lives);
     }
     removeMob(scene, mob);
@@ -305,17 +325,62 @@ function applyBonusEffect(bonusKind) {
   }
 
   if (bonusKind === 'shooter') {
-    const prev = getShooterCount();
-    increaseShooterCount();
-    // If shooter count is capped, fall back to rapid fire so bonus kills always feel rewarding.
-    if (getShooterCount() === prev) {
-      activateRapidFire();
-    }
+    activateDoubleShotBonus();
     return;
   }
 
   // Safety fallback in case a bonus type is missing or malformed.
   activateRapidFire();
+}
+
+function addScore(points) {
+  if (!Number.isFinite(points) || points <= 0) return;
+  score += points;
+  updateScoreHUD(score);
+  sendScore(score);
+  checkLevelUps();
+}
+
+function getLevelForScore(value) {
+  if (value < 100) return 1;
+  return 2 + Math.floor((value - 100) / 200);
+}
+
+function getNextLevelScore(level) {
+  if (level < 1) return 100;
+  if (level === 1) return 100;
+  return 100 + (level - 1) * 200;
+}
+
+function grantLevelUpPowerup(level) {
+  const lowTier = ['rapid', 'double', 'pierce'];
+  const highTier = ['rapid', 'double', 'pierce', 'triple'];
+  const pool = level >= 3 ? highTier : lowTier;
+  const roll = pool[Math.floor(Math.random() * pool.length)];
+
+  if (roll === 'rapid') {
+    activateRapidFire(12000);
+    return;
+  }
+  if (roll === 'pierce') {
+    activatePiercingBonus(12000);
+    return;
+  }
+  if (roll === 'triple') {
+    activateTripleShotBonus(10500);
+    return;
+  }
+  activateDoubleShotBonus(13000);
+}
+
+function checkLevelUps() {
+  const computedLevel = getLevelForScore(score);
+  while (currentLevel < computedLevel) {
+    currentLevel++;
+    setLevelFireRateBoost(currentLevel);
+    grantLevelUpPowerup(currentLevel);
+  }
+  updateLevelHUD(currentLevel, getNextLevelScore(currentLevel));
 }
 
 let lastTime = 0;
@@ -340,7 +405,9 @@ function gameLoop(timestamp) {
     updateRoadMotion(delta);
 
     lastStep = 'updateMobs';
-    updateMobs(scene, delta, getPlayerShotRate(timestamp));
+    updateMobs(scene, delta, getPlayerShotRate(timestamp), score);
+    lastStep = 'updatePowerupsHUD';
+    updatePowerupsHUD(getActivePowerups(timestamp));
     lastStep = 'processMobCollisions';
     processMobCollisions();
     lastStep = 'processMobsAtBase';

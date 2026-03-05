@@ -144,6 +144,76 @@
       animation: damageFlash 0.3s ease;
     }
 
+    #level-hud {
+      position: fixed;
+      top: 76px; left: 16px;
+      color: #ffe184;
+      font-size: 0.95rem;
+      font-weight: 700;
+      z-index: 50;
+      display: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+    #level-hud small {
+      display: block;
+      color: #d2d7e5;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      margin-top: 2px;
+    }
+
+    #powerups-hud {
+      position: fixed;
+      top: 116px; left: 16px;
+      width: 230px;
+      background: rgba(10, 10, 26, 0.9);
+      border: 1px solid #2463b7;
+      border-radius: 10px;
+      padding: 10px 12px;
+      z-index: 50;
+      display: none;
+      pointer-events: none;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    }
+    #powerups-hud h3 {
+      color: #7ec8ff;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 8px;
+    }
+    #powerups-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .powerup-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 6px;
+      border-radius: 6px;
+      background: rgba(30, 62, 100, 0.35);
+      color: #d8ecff;
+      font-size: 0.82rem;
+    }
+    .powerup-label {
+      font-weight: 700;
+    }
+    .powerup-timer {
+      font-variant-numeric: tabular-nums;
+      color: #9bd4ff;
+      margin-left: 8px;
+    }
+    .powerup-empty {
+      color: #8598b3;
+      font-size: 0.78rem;
+      padding: 3px 2px;
+    }
+
     #controls-hint {
       position: fixed;
       bottom: 24px;
@@ -225,6 +295,16 @@
   <!-- In-game HUD -->
   <div id="score-hud">Score: <span id="score-value">0</span></div>
   <div id="lives-hud"><span id="lives-value">20</span></div>
+  <div id="level-hud">
+    Level <span id="level-value">1</span>
+    <small>Next: <span id="next-level-value">100 score</span></small>
+  </div>
+  <div id="powerups-hud">
+    <h3>Active Power-Ups</h3>
+    <ul id="powerups-list">
+      <li class="powerup-empty">No active power-ups</li>
+    </ul>
+  </div>
   <div id="controls-hint">&larr; &rarr; Arrow Keys to Move</div>
 
   <!-- Game Over -->
@@ -237,7 +317,7 @@
   </div>
 
   <div id="leaderboard">
-    <h2>Leaderboard</h2>
+    <h2>Active Players (Best)</h2>
     <ol id="lb-list"></ol>
   </div>
 

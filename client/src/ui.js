@@ -16,6 +16,8 @@ export function initUI(onPlay) {
     overlay.style.display = 'none';
     document.getElementById('score-hud').style.display = 'block';
     document.getElementById('lives-hud').style.display = 'block';
+    document.getElementById('level-hud').style.display = 'block';
+    document.getElementById('powerups-hud').style.display = 'block';
     document.getElementById('leaderboard').style.display = 'block';
     document.getElementById('controls-hint').style.display = 'block';
 
@@ -57,12 +59,56 @@ export function updateScoreHUD(score) {
 
 export function updateLivesHUD(lives) {
   const el = document.getElementById('lives-hud');
-  const hearts = lives > 0 ? '\u2764'.repeat(Math.min(lives, 20)) : '';
+  const hearts = lives > 0 ? '\u2764'.repeat(Math.min(lives, 10)) : '';
   document.getElementById('lives-value').textContent = hearts || 'DEAD';
 
   el.classList.remove('damage');
   void el.offsetWidth;
   el.classList.add('damage');
+}
+
+export function updateLevelHUD(level, nextLevelScore) {
+  const levelValue = document.getElementById('level-value');
+  const nextValue = document.getElementById('next-level-value');
+  if (!levelValue || !nextValue) return;
+
+  levelValue.textContent = String(level);
+  if (Number.isFinite(nextLevelScore)) {
+    nextValue.textContent = `${nextLevelScore.toLocaleString()} score`;
+  } else {
+    nextValue.textContent = 'MAX';
+  }
+}
+
+export function updatePowerupsHUD(powerups) {
+  const list = document.getElementById('powerups-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (!powerups || powerups.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'powerup-empty';
+    li.textContent = 'No active power-ups';
+    list.appendChild(li);
+    return;
+  }
+
+  for (const powerup of powerups) {
+    const li = document.createElement('li');
+    li.className = 'powerup-item';
+
+    const label = document.createElement('span');
+    label.className = 'powerup-label';
+    label.textContent = powerup.label;
+
+    const timer = document.createElement('span');
+    timer.className = 'powerup-timer';
+    timer.textContent = `${(powerup.msRemaining / 1000).toFixed(1)}s`;
+
+    li.appendChild(label);
+    li.appendChild(timer);
+    list.appendChild(li);
+  }
 }
 
 export function showGameOver(finalScore, onRetry) {
