@@ -6,6 +6,7 @@ const deathParticles = [];
 let spawnTimer = 0;
 let elapsedTime = 0;
 let mobsSpawnedTotal = 0;
+let bonusFramesSpawned = 0;
 let smoothedBalanceFactor = 1;
 
 const SPAWN_Z = -84;
@@ -22,6 +23,9 @@ const MAX_MOB_SPEED = 6;
 const MOB_RADIUS = 0.6;
 const BONUS_FRAME_EVERY = 12;
 const BASE_PLAYER_SHOTS_PER_SEC = 1000 / 320;
+const BONUS_WALL_BASE_HITS = 2;
+const BONUS_WALL_HIT_STEP_EVERY = 3;
+const BONUS_WALL_MAX_HITS = 8;
 
 const mobGeometry = new THREE.BoxGeometry(1.0, 1.0, 1.0);
 const mobMaterial = new THREE.MeshStandardMaterial({
@@ -45,11 +49,19 @@ const tankMobMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.6,
 });
 const bonusFrameGeometry = new THREE.BoxGeometry(1.3, 1.3, 1.3);
+const bonusWallGeometry = new THREE.BoxGeometry(1.9, 1.5, 0.35);
 const bonusFrameMaterials = {
   rapid: new THREE.MeshBasicMaterial({ color: 0x4dd6ff, wireframe: true }),
   shooter: new THREE.MeshBasicMaterial({ color: 0xffcc44, wireframe: true }),
   pierce: new THREE.MeshBasicMaterial({ color: 0xcc77ff, wireframe: true }),
 };
+const bonusWallMaterial = new THREE.MeshStandardMaterial({
+  color: 0x4f5d75,
+  emissive: 0x1e2633,
+  emissiveIntensity: 0.35,
+  roughness: 0.55,
+  metalness: 0.2,
+});
 
 const particleGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
 const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
@@ -87,6 +99,11 @@ function pickBonusKind() {
   return 'shooter';
 }
 
+function getBonusWallHits() {
+  const bonusTier = Math.floor(bonusFramesSpawned / BONUS_WALL_HIT_STEP_EVERY);
+  return Math.min(BONUS_WALL_BASE_HITS + bonusTier, BONUS_WALL_MAX_HITS);
+}
+
 function getMobType() {
   const r = Math.random();
   const minutesElapsed = elapsedTime / 60000;
@@ -103,10 +120,21 @@ function spawnMob(scene, balanceFactor) {
 
   if (type === 'bonus') {
     bonusKind = pickBonusKind();
-    mesh = new THREE.Mesh(bonusFrameGeometry, bonusFrameMaterials[bonusKind]);
-    hp = 1;
+    const frame = new THREE.Mesh(bonusFrameGeometry, bonusFrameMaterials[bonusKind]);
+    const wall = new THREE.Mesh(bonusWallGeometry, bonusWallMaterial);
+    wall.position.z = 0.65; // Toward the player; acts as the blocking wall.
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+
+    const group = new THREE.Group();
+    group.add(frame);
+    group.add(wall);
+    mesh = group;
+
+    hp = getBonusWallHits();
     speed = getMobSpeed() * (1.0 + (balanceFactor - 1) * 0.2);
-    radius = 0.7;
+    radius = 1.0;
+    bonusFramesSpawned++;
   } else if (type === 'tank') {
     const geo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
     mesh = new THREE.Mesh(geo, tankMobMaterial);
@@ -221,9 +249,7 @@ export function checkMobsReachedBase() {
 
 export function removeMob(scene, mob) {
   scene.remove(mob.mesh);
-  if (mob.mesh.geometry !== mobGeometry && mob.mesh.geometry !== bonusFrameGeometry) {
-    mob.mesh.geometry.dispose();
-  }
+  disposeMobVisual(mob.mesh);
   const idx = activeMobs.indexOf(mob);
   if (idx !== -1) activeMobs.splice(idx, 1);
 }
@@ -262,9 +288,7 @@ function updateParticles(scene, dt) {
 export function resetMobs(scene) {
   for (const mob of [...activeMobs]) {
     scene.remove(mob.mesh);
-    if (mob.mesh.geometry !== mobGeometry && mob.mesh.geometry !== bonusFrameGeometry) {
-      mob.mesh.geometry.dispose();
-    }
+    disposeMobVisual(mob.mesh);
   }
   activeMobs.length = 0;
 
@@ -277,4 +301,21 @@ export function resetMobs(scene) {
   elapsedTime = 0;
   mobsSpawnedTotal = 0;
   smoothedBalanceFactor = 1;
+  bonusFramesSpawned = 0;
+}
+
+function disposeMobVisual(root) {
+  if (!root) return;
+  if (root.isGroup) {
+    for (const child of root.children) {
+      if (child.geometry && child.geometry !== bonusFrameGeometry && child.geometry !== bonusWallGeometry) {
+        child.geometry.dispose();
+      }
+    }
+    return;
+  }
+
+  if (root.geometry && root.geometry !== mobGeometry && root.geometry !== bonusFrameGeometry) {
+    root.geometry.dispose();
+  }
 }

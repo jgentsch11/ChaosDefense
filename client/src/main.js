@@ -83,8 +83,8 @@ function initScene() {
   scene.fog = new THREE.Fog(0x151525, 50, 120);
 
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 14, 16);
-  camera.lookAt(0, 0, -4);
+  camera.position.set(0, 15, 18);
+  camera.lookAt(0, 0, -10);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
