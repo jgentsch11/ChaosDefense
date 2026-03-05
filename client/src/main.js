@@ -2,10 +2,18 @@ import * as THREE from 'three';
 import { initPhysics, stepPhysics, getWorld, createStaticBody } from './physics.js';
 import { initUI, updateScoreHUD, updateLivesHUD, showGameOver } from './ui.js';
 import { sendScore } from './network.js';
-import { createCannon, setupControls, updateCannon } from './cannon.js';
-import { createGates, processGateCollisions } from './gates.js';
+import {
+  createCannon,
+  setupControls,
+  updateCannon,
+  activateRapidFire,
+  activatePiercingBonus,
+  increaseShooterCount,
+  getShooterCount,
+  getPlayerShotRate,
+} from './cannon.js';
 import { createEnemyBase, getEndZoneZ } from './enemies.js';
-import { syncUnits, cleanupFallenUnits, getActiveUnits, removeUnit } from './units.js';
+import { syncUnits, cleanupFallenUnits, getActiveUnits, removeUnit, resetUnits } from './units.js';
 import {
   updateMobs,
   checkMobUnitCollisions,
@@ -18,9 +26,18 @@ let scene, camera, renderer;
 let score = 0;
 let lives = 20;
 let gameRunning = false;
+const roadMarkings = [];
+let roadScrollMinZ = -19;
+let roadScrollMaxZ = 10;
+const ROAD_SCROLL_SPEED = 9;
 
 async function startGame(username) {
   try {
+    if (scene) {
+      resetUnits(scene);
+      resetMobs(scene);
+    }
+
     await initPhysics();
 
     score = 0;
@@ -31,7 +48,6 @@ async function startGame(username) {
     initScene();
     buildLane();
     createCannon(scene);
-    createGates(scene);
     createEnemyBase(scene);
     setupControls();
 
@@ -64,7 +80,7 @@ function showError(msg) {
 function initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x151525);
-  scene.fog = new THREE.Fog(0x151525, 35, 65);
+  scene.fog = new THREE.Fog(0x151525, 50, 120);
 
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
   camera.position.set(0, 14, 16);
@@ -105,8 +121,8 @@ function initScene() {
 }
 
 function buildLane() {
-  const laneLength = 30;
-  const laneWidth = 6;
+  const laneLength = 180;
+  const laneWidth = 16;
   const halfWidth = laneWidth / 2;
 
   // Left half floor — horde side (dark red tint)
@@ -117,9 +133,9 @@ function buildLane() {
   leftFloor.receiveShadow = true;
   scene.add(leftFloor);
 
-  // Right half floor — bonus side (dark green tint)
+  // Right half floor — enemy lane accent
   const rightGeo = new THREE.BoxGeometry(halfWidth, 0.2, laneLength);
-  const rightMat = new THREE.MeshStandardMaterial({ color: 0x203a30, roughness: 0.7 });
+  const rightMat = new THREE.MeshStandardMaterial({ color: 0x2d243e, roughness: 0.7 });
   const rightFloor = new THREE.Mesh(rightGeo, rightMat);
   rightFloor.position.set(halfWidth / 2, -0.1, -4);
   rightFloor.receiveShadow = true;
@@ -137,8 +153,8 @@ function buildLane() {
   scene.add(divider);
 
   // Side labels near the cannon end
-  addLaneLabel(scene, 'HORDE', -1.5, 7, '#e94560');
-  addLaneLabel(scene, 'BONUS', 1.5, 7, '#00cc66');
+  addLaneLabel(scene, 'HORDE', -4.0, 10, '#e94560');
+  addLaneLabel(scene, 'ENEMY', 4.0, 10, '#8b7dff');
 
   // Walls
   const wallHeight = 0.8;
@@ -182,31 +198,49 @@ function addLaneLabel(scene, text, x, z, color) {
 function addLaneMarkings(laneWidth, laneLength) {
   const lineGeo = new THREE.PlaneGeometry(0.05, 1.2);
   const lineMat = new THREE.MeshBasicMaterial({ color: 0x223355, side: THREE.DoubleSide });
+  const laneCenterOffset = laneWidth * 0.25;
+  roadMarkings.length = 0;
+  roadScrollMinZ = -4 - laneLength / 2 + 1.2;
+  roadScrollMaxZ = -4 + laneLength / 2 - 1.2;
 
-  for (let z = 10; z > -19; z -= 3) {
+  for (let z = roadScrollMaxZ; z > roadScrollMinZ; z -= 2.8) {
     // Left side dashes
     const lineL = new THREE.Mesh(lineGeo, lineMat);
     lineL.rotation.x = -Math.PI / 2;
-    lineL.position.set(-1.5, 0.01, z);
+    lineL.position.set(-laneCenterOffset, 0.01, z);
     scene.add(lineL);
+    roadMarkings.push(lineL);
 
     // Right side dashes
     const lineR = new THREE.Mesh(lineGeo, lineMat);
     lineR.rotation.x = -Math.PI / 2;
-    lineR.position.set(1.5, 0.01, z);
+    lineR.position.set(laneCenterOffset, 0.01, z);
     scene.add(lineR);
+    roadMarkings.push(lineR);
+  }
+}
+
+function updateRoadMotion(deltaMs) {
+  const dz = (deltaMs / 1000) * ROAD_SCROLL_SPEED;
+  const span = roadScrollMaxZ - roadScrollMinZ;
+  for (const dash of roadMarkings) {
+    dash.position.z += dz;
+    if (dash.position.z > roadScrollMaxZ) {
+      dash.position.z -= span;
+    }
   }
 }
 
 function checkScoring() {
   const units = getActiveUnits();
-  const scoreZ = getEndZoneZ() + 2;
+  // Score/remove units ahead of the base collider so they cannot pile up at spawn.
+  const scoreZ = getEndZoneZ() + 1.4;
 
   for (const unit of [...units]) {
     if (unit.scored || !unit.body) continue;
 
     const pos = unit.body.translation();
-    if (pos.z < scoreZ) {
+    if (pos.z <= scoreZ) {
       unit.scored = true;
       score += unit.type === 'tank' ? 10 : 1;
       updateScoreHUD(score);
@@ -221,7 +255,11 @@ function processMobCollisions() {
   const units = getActiveUnits();
 
   const { toRemoveUnits, toRemoveMobs } = checkMobUnitCollisions(scene, units, (mob) => {
-    const points = mob.type === 'tank' ? 5 : mob.type === 'fast' ? 2 : 1;
+    if (mob.type === 'bonus') {
+      applyBonusEffect(mob.bonusKind);
+    }
+
+    const points = mob.type === 'tank' ? 5 : mob.type === 'fast' ? 2 : mob.type === 'bonus' ? 8 : 1;
     score += points;
     updateScoreHUD(score);
     sendScore(score);
@@ -238,18 +276,46 @@ function processMobCollisions() {
 function processMobsAtBase() {
   const reached = checkMobsReachedBase();
   for (const mob of reached) {
-    lives--;
-    updateLivesHUD(lives);
+    if (mob.type !== 'bonus') {
+      lives--;
+      updateLivesHUD(lives);
+    }
     removeMob(scene, mob);
   }
 
   if (lives <= 0) {
     gameRunning = false;
     showGameOver(score, () => {
+      resetUnits(scene);
       resetMobs(scene);
       startGame('');
     });
   }
+}
+
+function applyBonusEffect(bonusKind) {
+  if (bonusKind === 'rapid') {
+    activateRapidFire();
+    return;
+  }
+
+  if (bonusKind === 'pierce') {
+    activatePiercingBonus();
+    return;
+  }
+
+  if (bonusKind === 'shooter') {
+    const prev = getShooterCount();
+    increaseShooterCount();
+    // If shooter count is capped, fall back to rapid fire so bonus kills always feel rewarding.
+    if (getShooterCount() === prev) {
+      activateRapidFire();
+    }
+    return;
+  }
+
+  // Safety fallback in case a bonus type is missing or malformed.
+  activateRapidFire();
 }
 
 let lastTime = 0;
@@ -268,13 +334,13 @@ function gameLoop(timestamp) {
     stepPhysics();
     lastStep = 'syncUnits';
     syncUnits();
-    lastStep = 'processGateCollisions';
-    processGateCollisions(scene);
     lastStep = 'checkScoring';
     checkScoring();
+    lastStep = 'updateRoadMotion';
+    updateRoadMotion(delta);
 
     lastStep = 'updateMobs';
-    updateMobs(scene, delta);
+    updateMobs(scene, delta, getPlayerShotRate(timestamp));
     lastStep = 'processMobCollisions';
     processMobCollisions();
     lastStep = 'processMobsAtBase';

@@ -17,8 +17,12 @@ const GATE_LEFT_X = 0.15;
 const GATE_RIGHT_X = 2.85;
 const GATE_CENTER_X = (GATE_LEFT_X + GATE_RIGHT_X) / 2;
 const GATE_Z_THRESHOLD = 0.5;
+const GATE_X_MARGIN = 0.05;
 
 export function createGates(scene) {
+  gates.length = 0;
+  processedPairs.clear();
+
   for (let i = 0; i < GATE_CONFIGS.length; i++) {
     const gate = buildGate(scene, GATE_CONFIGS[i]);
     gate.id = i;
@@ -75,14 +79,15 @@ export function processGateCollisions(scene) {
 
   for (const gate of gates) {
     for (const unit of [...units]) {
-      if (unit.scored || !unit.body) continue;
+      if (unit.scored || !unit.body || !unit.canTriggerGates) continue;
 
       const pairKey = `g${gate.id}_u${unit.id}`;
       if (processedPairs.has(pairKey)) continue;
 
       const pos = unit.body.translation();
       const inZ = Math.abs(pos.z - gate.config.z) < GATE_Z_THRESHOLD;
-      const inX = pos.x >= GATE_LEFT_X - 0.3 && pos.x <= GATE_RIGHT_X + 0.3;
+      // Keep gate triggers to the bonus lane only; center shots should not auto-multiply.
+      const inX = pos.x >= GATE_LEFT_X + GATE_X_MARGIN && pos.x <= GATE_RIGHT_X - GATE_X_MARGIN;
 
       if (inZ && inX) {
         processedPairs.add(pairKey);
@@ -105,18 +110,20 @@ function triggerGate(scene, gate, sourceUnit) {
     spawnCount = cfg.value;
   }
 
+  const baseForwardSpeed = Math.min(vel.z, -9.5);
+
   for (let i = 0; i < spawnCount; i++) {
-    const offset = new THREE.Vector3(
-      (Math.random() - 0.5) * 1.0,
-      Math.random() * 0.5,
-      (Math.random() - 0.5) * 0.5
+    const laneOffset = i - (spawnCount - 1) / 2;
+    const spawnPos = new THREE.Vector3(
+      THREE.MathUtils.clamp(pos.x + laneOffset * 0.35, GATE_LEFT_X + GATE_X_MARGIN, GATE_RIGHT_X - GATE_X_MARGIN),
+      Math.max(pos.y, 0.45),
+      pos.z - 0.2 - Math.abs(laneOffset) * 0.05
     );
-    const spawnPos = new THREE.Vector3(pos.x + offset.x, pos.y + offset.y, pos.z + offset.z);
     const spawnVel = new THREE.Vector3(
-      vel.x + (Math.random() - 0.5) * 2,
-      vel.y + Math.random() * 1,
-      vel.z
+      vel.x * 0.35 + laneOffset * 0.6,
+      0.2,
+      baseForwardSpeed
     );
-    spawnBlueNormie(scene, spawnPos, spawnVel);
+    spawnBlueNormie(scene, spawnPos, spawnVel, { canTriggerGates: false });
   }
 }

@@ -6,19 +6,24 @@ const deathParticles = [];
 let spawnTimer = 0;
 let elapsedTime = 0;
 let mobsSpawnedTotal = 0;
+let smoothedBalanceFactor = 1;
 
-const SPAWN_Z = -17;
+const SPAWN_Z = -84;
 const PLAYER_BASE_Z = 8;
-const MOB_X_MIN = -2.5;
-const MOB_X_MAX = -0.3;
+const LEFT_LANE_X_MIN = -7.2;
+const LEFT_LANE_X_MAX = -0.8;
+const RIGHT_LANE_X_MIN = 0.8;
+const RIGHT_LANE_X_MAX = 7.2;
 
-const BASE_SPAWN_INTERVAL = 2000;
-const MIN_SPAWN_INTERVAL = 400;
+const BASE_SPAWN_INTERVAL = 1300;
+const MIN_SPAWN_INTERVAL = 250;
 const BASE_MOB_SPEED = 3;
 const MAX_MOB_SPEED = 6;
-const MOB_RADIUS = 0.35;
+const MOB_RADIUS = 0.6;
+const BONUS_FRAME_EVERY = 12;
+const BASE_PLAYER_SHOTS_PER_SEC = 1000 / 320;
 
-const mobGeometry = new THREE.BoxGeometry(0.55, 0.55, 0.55);
+const mobGeometry = new THREE.BoxGeometry(1.0, 1.0, 1.0);
 const mobMaterial = new THREE.MeshStandardMaterial({
   color: 0xe94560,
   emissive: 0xe94560,
@@ -39,18 +44,47 @@ const tankMobMaterial = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.2,
   roughness: 0.6,
 });
+const bonusFrameGeometry = new THREE.BoxGeometry(1.3, 1.3, 1.3);
+const bonusFrameMaterials = {
+  rapid: new THREE.MeshBasicMaterial({ color: 0x4dd6ff, wireframe: true }),
+  shooter: new THREE.MeshBasicMaterial({ color: 0xffcc44, wireframe: true }),
+  pierce: new THREE.MeshBasicMaterial({ color: 0xcc77ff, wireframe: true }),
+};
 
 const particleGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
 const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
 
 function getSpawnInterval() {
-  const rampFactor = Math.min(elapsedTime / 120000, 1);
+  const rampFactor = Math.min(elapsedTime / 50000, 1);
   return BASE_SPAWN_INTERVAL - rampFactor * (BASE_SPAWN_INTERVAL - MIN_SPAWN_INTERVAL);
 }
 
 function getMobSpeed() {
-  const rampFactor = Math.min(elapsedTime / 150000, 1);
+  const rampFactor = Math.min(elapsedTime / 70000, 1);
   return BASE_MOB_SPEED + rampFactor * (MAX_MOB_SPEED - BASE_MOB_SPEED);
+}
+
+function getBalanceFactor(playerShotsPerSecond) {
+  const rawFactor = THREE.MathUtils.clamp(
+    playerShotsPerSecond / BASE_PLAYER_SHOTS_PER_SEC,
+    0.7,
+    3.2
+  );
+  smoothedBalanceFactor = THREE.MathUtils.lerp(smoothedBalanceFactor, rawFactor, 0.12);
+  return smoothedBalanceFactor;
+}
+
+function pickLaneRange() {
+  return Math.random() < 0.5
+    ? { min: LEFT_LANE_X_MIN, max: LEFT_LANE_X_MAX }
+    : { min: RIGHT_LANE_X_MIN, max: RIGHT_LANE_X_MAX };
+}
+
+function pickBonusKind() {
+  const r = Math.random();
+  if (r < 0.45) return 'rapid';
+  if (r < 0.75) return 'pierce';
+  return 'shooter';
 }
 
 function getMobType() {
@@ -62,35 +96,43 @@ function getMobType() {
   return 'basic';
 }
 
-function spawnMob(scene) {
-  const type = getMobType();
-  let mesh, hp, speed, radius;
+function spawnMob(scene, balanceFactor) {
+  const shouldSpawnBonusFrame = mobsSpawnedTotal > 0 && mobsSpawnedTotal % BONUS_FRAME_EVERY === 0;
+  const type = shouldSpawnBonusFrame ? 'bonus' : getMobType();
+  let mesh, hp, speed, radius, bonusKind = null;
 
-  if (type === 'tank') {
-    const geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  if (type === 'bonus') {
+    bonusKind = pickBonusKind();
+    mesh = new THREE.Mesh(bonusFrameGeometry, bonusFrameMaterials[bonusKind]);
+    hp = 1;
+    speed = getMobSpeed() * (1.0 + (balanceFactor - 1) * 0.2);
+    radius = 0.7;
+  } else if (type === 'tank') {
+    const geo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
     mesh = new THREE.Mesh(geo, tankMobMaterial);
     hp = 3;
-    speed = getMobSpeed() * 0.6;
-    radius = 0.5;
+    speed = getMobSpeed() * 0.6 * balanceFactor;
+    radius = 0.85;
   } else if (type === 'fast') {
-    const geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    const geo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
     mesh = new THREE.Mesh(geo, fastMobMaterial);
     hp = 1;
-    speed = getMobSpeed() * 1.4;
-    radius = 0.25;
+    speed = getMobSpeed() * 1.4 * balanceFactor;
+    radius = 0.42;
   } else {
     mesh = new THREE.Mesh(mobGeometry, mobMaterial);
     hp = 1;
-    speed = getMobSpeed();
+    speed = getMobSpeed() * balanceFactor;
     radius = MOB_RADIUS;
   }
 
-  const x = MOB_X_MIN + Math.random() * (MOB_X_MAX - MOB_X_MIN);
+  const lane = pickLaneRange();
+  const x = lane.min + Math.random() * (lane.max - lane.min);
   mesh.position.set(x, radius + 0.05, SPAWN_Z);
   mesh.castShadow = true;
   scene.add(mesh);
 
-  activeMobs.push({ mesh, type, hp, speed, radius, scored: false });
+  activeMobs.push({ mesh, type, hp, speed, radius, bonusKind, scored: false });
   mobsSpawnedTotal++;
 }
 
@@ -102,14 +144,19 @@ export function getMobsSpawnedTotal() {
   return mobsSpawnedTotal;
 }
 
-export function updateMobs(scene, delta) {
+export function updateMobs(scene, delta, playerShotsPerSecond = BASE_PLAYER_SHOTS_PER_SEC) {
   elapsedTime += delta;
   spawnTimer += delta;
 
-  const interval = getSpawnInterval();
+  const balanceFactor = getBalanceFactor(playerShotsPerSecond);
+  const interval = getSpawnInterval() / balanceFactor;
   if (spawnTimer >= interval) {
     spawnTimer -= interval;
-    spawnMob(scene);
+    spawnMob(scene, balanceFactor);
+    // Stronger players trigger occasional extra horde pressure to keep parity.
+    if (balanceFactor > 1.2 && Math.random() < 0.35) {
+      spawnMob(scene, balanceFactor);
+    }
   }
 
   const dt = delta / 1000;
@@ -142,8 +189,10 @@ export function checkMobUnitCollisions(scene, units, onMobKilled) {
       const hitDist = mob.radius + 0.3;
       if (distSq < hitDist * hitDist) {
         mob.hp--;
-        unit.scored = true;
-        toRemoveUnits.push(unit);
+        if (!unit.pierceAll) {
+          unit.scored = true;
+          toRemoveUnits.push(unit);
+        }
 
         if (mob.hp <= 0) {
           mob.scored = true;
@@ -172,7 +221,7 @@ export function checkMobsReachedBase() {
 
 export function removeMob(scene, mob) {
   scene.remove(mob.mesh);
-  if (mob.mesh.geometry !== mobGeometry) {
+  if (mob.mesh.geometry !== mobGeometry && mob.mesh.geometry !== bonusFrameGeometry) {
     mob.mesh.geometry.dispose();
   }
   const idx = activeMobs.indexOf(mob);
@@ -213,7 +262,9 @@ function updateParticles(scene, dt) {
 export function resetMobs(scene) {
   for (const mob of [...activeMobs]) {
     scene.remove(mob.mesh);
-    if (mob.mesh.geometry !== mobGeometry) mob.mesh.geometry.dispose();
+    if (mob.mesh.geometry !== mobGeometry && mob.mesh.geometry !== bonusFrameGeometry) {
+      mob.mesh.geometry.dispose();
+    }
   }
   activeMobs.length = 0;
 
@@ -225,4 +276,5 @@ export function resetMobs(scene) {
   spawnTimer = 0;
   elapsedTime = 0;
   mobsSpawnedTotal = 0;
+  smoothedBalanceFactor = 1;
 }
