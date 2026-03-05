@@ -125,7 +125,90 @@
       z-index: 50;
       display: none;
       text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+      pointer-events: none;
     }
+
+    #lives-hud {
+      position: fixed;
+      top: 48px; left: 16px;
+      color: #e94560;
+      font-size: 1.2rem;
+      font-weight: 700;
+      z-index: 50;
+      display: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+
+    #lives-hud.damage {
+      animation: damageFlash 0.3s ease;
+    }
+
+    #controls-hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.4);
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      z-index: 50;
+      display: none;
+      pointer-events: none;
+    }
+
+    @keyframes damageFlash {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.4); color: #ff0000; }
+      100% { transform: scale(1); }
+    }
+
+    /* Game Over */
+    #gameover-overlay {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.88);
+      z-index: 100;
+    }
+    #gameover-box {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border: 2px solid #e94560;
+      border-radius: 16px;
+      padding: 40px 48px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(233,69,96,0.4);
+    }
+    #gameover-box h1 {
+      color: #e94560;
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+    }
+    #gameover-score {
+      color: #fff;
+      font-size: 1.4rem;
+      margin-bottom: 24px;
+    }
+    #retry-btn {
+      display: block;
+      width: 220px;
+      margin: 0 auto;
+      padding: 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #e94560, #c73659);
+      color: #fff;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    #retry-btn:hover { transform: scale(1.03); box-shadow: 0 0 20px rgba(233,69,96,0.5); }
+    #retry-btn:active { transform: scale(0.97); }
   </style>
 </head>
 <body>
@@ -141,6 +224,17 @@
 
   <!-- In-game HUD -->
   <div id="score-hud">Score: <span id="score-value">0</span></div>
+  <div id="lives-hud"><span id="lives-value">20</span></div>
+  <div id="controls-hint">&larr; &rarr; Arrow Keys to Move</div>
+
+  <!-- Game Over -->
+  <div id="gameover-overlay">
+    <div id="gameover-box">
+      <h1>Game Over</h1>
+      <p id="gameover-score">Final Score: 0</p>
+      <button id="retry-btn">Play Again</button>
+    </div>
+  </div>
 
   <div id="leaderboard">
     <h2>Leaderboard</h2>

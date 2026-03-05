@@ -15,7 +15,9 @@ export function initUI(onPlay) {
 
     overlay.style.display = 'none';
     document.getElementById('score-hud').style.display = 'block';
+    document.getElementById('lives-hud').style.display = 'block';
     document.getElementById('leaderboard').style.display = 'block';
+    document.getElementById('controls-hint').style.display = 'block';
 
     connect(username);
     if (onPlayCallback) onPlayCallback(username);
@@ -51,4 +53,28 @@ export function updateLeaderboard(top10, myUsername) {
 
 export function updateScoreHUD(score) {
   document.getElementById('score-value').textContent = score.toLocaleString();
+}
+
+export function updateLivesHUD(lives) {
+  const el = document.getElementById('lives-hud');
+  const hearts = lives > 0 ? '\u2764'.repeat(Math.min(lives, 20)) : '';
+  document.getElementById('lives-value').textContent = hearts || 'DEAD';
+
+  el.classList.remove('damage');
+  void el.offsetWidth;
+  el.classList.add('damage');
+}
+
+export function showGameOver(finalScore, onRetry) {
+  const overlay = document.getElementById('gameover-overlay');
+  overlay.style.display = 'flex';
+  document.getElementById('gameover-score').textContent = `Final Score: ${finalScore.toLocaleString()}`;
+
+  const retryBtn = document.getElementById('retry-btn');
+  const handler = () => {
+    retryBtn.removeEventListener('click', handler);
+    overlay.style.display = 'none';
+    if (onRetry) onRetry();
+  };
+  retryBtn.addEventListener('click', handler);
 }

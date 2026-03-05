@@ -5,7 +5,8 @@ let rapierReady = false;
 
 export async function initPhysics() {
   await RAPIER.init();
-  world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+  const gravity = { x: 0, y: -9.81, z: 0 };
+  world = new RAPIER.World(gravity);
   rapierReady = true;
   return world;
 }
@@ -30,9 +31,9 @@ export function createDynamicBody(world, position, radius, mass = 1, restitution
   const colliderDesc = RAPIER.ColliderDesc.ball(radius)
     .setMass(mass)
     .setRestitution(restitution);
-  world.createCollider(colliderDesc, body);
+  const collider = world.createCollider(colliderDesc, body);
 
-  return body;
+  return { body, collider };
 }
 
 export function createStaticBody(world, position, halfExtents) {

@@ -2,13 +2,17 @@ import * as THREE from 'three';
 import { spawnBlueNormie } from './units.js';
 
 const FIRE_INTERVAL_MS = 200;
-const LAUNCH_SPEED = 12;
-const LANE_WIDTH = 6;
+const LAUNCH_SPEED = 8;
+const LANE_HALF_WIDTH = 2.5;
+const MOVE_SPEED = 8;
 
 let cannonMesh = null;
-let aimX = 0;
+let muzzleFlash = null;
 let lastFireTime = 0;
-let firing = false;
+let lastCannonTime = 0;
+let moveLeft = false;
+let moveRight = false;
+let flashTimer = 0;
 
 export function createCannon(scene) {
   const group = new THREE.Group();
@@ -26,6 +30,12 @@ export function createCannon(scene) {
   barrel.rotation.x = Math.PI / 8;
   group.add(barrel);
 
+  const flashGeo = new THREE.SphereGeometry(0.25, 8, 6);
+  const flashMat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0 });
+  muzzleFlash = new THREE.Mesh(flashGeo, flashMat);
+  muzzleFlash.position.set(0, 0.9, -0.4);
+  group.add(muzzleFlash);
+
   group.position.set(0, 0.0, 8);
   group.castShadow = true;
   scene.add(group);
@@ -34,40 +44,53 @@ export function createCannon(scene) {
   return group;
 }
 
-export function setupControls(canvas) {
-  canvas.addEventListener('pointermove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const normalizedX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    aimX = normalizedX * (LANE_WIDTH / 2);
+export function setupControls() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft = true;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight = true;
   });
 
-  canvas.addEventListener('pointerdown', () => { firing = true; });
-  canvas.addEventListener('pointerup', () => { firing = false; });
-
-  // Fire while holding by default (auto-fire when pointer is down)
-  canvas.style.cursor = 'crosshair';
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft = false;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight = false;
+  });
 }
 
 export function updateCannon(scene, time) {
   if (!cannonMesh) return;
 
-  cannonMesh.position.x = THREE.MathUtils.lerp(cannonMesh.position.x, aimX, 0.15);
+  const dt = lastCannonTime === 0 ? 0.016 : Math.min((time - lastCannonTime) / 1000, 0.1);
+  lastCannonTime = time;
 
-  if (firing && time - lastFireTime > FIRE_INTERVAL_MS) {
+  const moveDir = (moveRight ? 1 : 0) - (moveLeft ? 1 : 0);
+  cannonMesh.position.x += moveDir * MOVE_SPEED * dt;
+  cannonMesh.position.x = THREE.MathUtils.clamp(cannonMesh.position.x, -LANE_HALF_WIDTH, LANE_HALF_WIDTH);
+
+  if (time - lastFireTime > FIRE_INTERVAL_MS) {
     lastFireTime = time;
     fireUnit(scene);
+  }
+
+  if (muzzleFlash && flashTimer > 0) {
+    flashTimer -= dt;
+    muzzleFlash.material.opacity = Math.max(flashTimer / 0.08, 0);
   }
 }
 
 function fireUnit(scene) {
   const pos = new THREE.Vector3(
-    cannonMesh.position.x + (Math.random() - 0.5) * 0.2,
+    cannonMesh.position.x + (Math.random() - 0.5) * 0.15,
     cannonMesh.position.y + 0.7,
     cannonMesh.position.z - 0.5
   );
 
-  const spread = (Math.random() - 0.5) * 1.5;
-  const velocity = new THREE.Vector3(spread, 2, -LAUNCH_SPEED);
+  const spread = (Math.random() - 0.5) * 0.4;
+  const velocity = new THREE.Vector3(spread, 1.5, -LAUNCH_SPEED);
 
   spawnBlueNormie(scene, pos, velocity);
+
+  flashTimer = 0.08;
+  if (muzzleFlash) {
+    muzzleFlash.material.opacity = 0.9;
+  }
 }

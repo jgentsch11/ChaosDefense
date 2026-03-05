@@ -1,19 +1,27 @@
 import * as THREE from 'three';
-import { createSensorZone, getWorld, RAPIER } from './physics.js';
+import { createSensorZone, getWorld } from './physics.js';
 import { spawnBlueNormie, getActiveUnits } from './units.js';
 
 const gates = [];
-const processedCollisions = new Set();
+const processedPairs = new Set();
 
 const GATE_CONFIGS = [
-  { z: 2, type: 'multiply', value: 2, label: 'x2', color: 0x00cc66 },
-  { z: -4, type: 'add', value: 5, label: '+5', color: 0x22aaff },
-  { z: -10, type: 'multiply', value: 2, label: 'x2', color: 0x00cc66 },
+  { z: 4,   type: 'multiply', value: 2, label: 'x2', color: 0x00cc66 },
+  { z: 0,   type: 'add',      value: 3, label: '+3', color: 0x22aaff },
+  { z: -4,  type: 'multiply', value: 2, label: 'x2', color: 0x00cc66 },
+  { z: -8,  type: 'add',      value: 5, label: '+5', color: 0x22aaff },
+  { z: -12, type: 'multiply', value: 3, label: 'x3', color: 0xffcc00 },
 ];
 
+const GATE_LEFT_X = 0.15;
+const GATE_RIGHT_X = 2.85;
+const GATE_CENTER_X = (GATE_LEFT_X + GATE_RIGHT_X) / 2;
+const GATE_Z_THRESHOLD = 0.5;
+
 export function createGates(scene) {
-  for (const cfg of GATE_CONFIGS) {
-    const gate = buildGate(scene, cfg);
+  for (let i = 0; i < GATE_CONFIGS.length; i++) {
+    const gate = buildGate(scene, GATE_CONFIGS[i]);
+    gate.id = i;
     gates.push(gate);
   }
 }
@@ -24,17 +32,18 @@ function buildGate(scene, cfg) {
   const postMat = new THREE.MeshStandardMaterial({ color: cfg.color });
 
   const leftPost = new THREE.Mesh(postGeo, postMat);
-  leftPost.position.set(-3, 1, cfg.z);
+  leftPost.position.set(GATE_LEFT_X, 1, cfg.z);
   group.add(leftPost);
 
   const rightPost = new THREE.Mesh(postGeo, postMat);
-  rightPost.position.set(3, 1, cfg.z);
+  rightPost.position.set(GATE_RIGHT_X, 1, cfg.z);
   group.add(rightPost);
 
-  const barGeo = new THREE.BoxGeometry(6.4, 0.3, 0.2);
+  const barWidth = GATE_RIGHT_X - GATE_LEFT_X + 0.2;
+  const barGeo = new THREE.BoxGeometry(barWidth, 0.3, 0.2);
   const barMat = new THREE.MeshStandardMaterial({ color: cfg.color, emissive: cfg.color, emissiveIntensity: 0.3 });
   const bar = new THREE.Mesh(barGeo, barMat);
-  bar.position.set(0, 2.1, cfg.z);
+  bar.position.set(GATE_CENTER_X, 2.1, cfg.z);
   group.add(bar);
 
   const canvas = document.createElement('canvas');
@@ -50,44 +59,33 @@ function buildGate(scene, cfg) {
   ctx.fillText(cfg.label, 128, 32);
 
   const texture = new THREE.CanvasTexture(canvas);
-  const labelGeo = new THREE.PlaneGeometry(1.6, 0.4);
+  const labelGeo = new THREE.PlaneGeometry(1.2, 0.35);
   const labelMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
   const labelMesh = new THREE.Mesh(labelGeo, labelMat);
-  labelMesh.position.set(0, 2.5, cfg.z);
+  labelMesh.position.set(GATE_CENTER_X, 2.45, cfg.z);
   group.add(labelMesh);
 
   scene.add(group);
 
-  const { body, collider } = createSensorZone(
-    getWorld(),
-    { x: 0, y: 1, z: cfg.z },
-    { x: 3, y: 1.5, z: 0.4 }
-  );
-
-  return { group, body, collider, config: cfg, colliderHandle: collider.handle };
+  return { group, config: cfg };
 }
 
 export function processGateCollisions(scene) {
-  const world = getWorld();
-  if (!world) return;
-
   const units = getActiveUnits();
 
   for (const gate of gates) {
     for (const unit of [...units]) {
-      if (unit.scored) continue;
+      if (unit.scored || !unit.body) continue;
 
-      const unitColliders = [];
-      unit.body.forEachCollider((c) => unitColliders.push(c));
-      if (unitColliders.length === 0) continue;
+      const pairKey = `g${gate.id}_u${unit.id}`;
+      if (processedPairs.has(pairKey)) continue;
 
-      const unitHandle = unitColliders[0].handle;
-      const pairKey = `${gate.colliderHandle}_${unitHandle}`;
+      const pos = unit.body.translation();
+      const inZ = Math.abs(pos.z - gate.config.z) < GATE_Z_THRESHOLD;
+      const inX = pos.x >= GATE_LEFT_X - 0.3 && pos.x <= GATE_RIGHT_X + 0.3;
 
-      if (processedCollisions.has(pairKey)) continue;
-
-      if (world.intersectionPair(gate.collider, unitColliders[0])) {
-        processedCollisions.add(pairKey);
+      if (inZ && inX) {
+        processedPairs.add(pairKey);
         triggerGate(scene, gate, unit);
       }
     }
