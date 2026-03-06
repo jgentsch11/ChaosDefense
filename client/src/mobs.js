@@ -19,12 +19,12 @@ const RIGHT_LANE_X_MIN = 0.8;
 const RIGHT_LANE_X_MAX = 7.2;
 const BONUS_SAFE_RIGHT_X_MIN = 2.9;
 
-const BASE_SPAWN_INTERVAL = 1380;
-const MIN_SPAWN_INTERVAL = 560;
-const EARLY_WAVE_DURATION_MS = 25000;
-const EARLY_WAVE_SPEEDUP = 0.82;
-const BASE_MOB_SPEED = 3.7;
-const MAX_MOB_SPEED = 4.7;
+const BASE_SPAWN_INTERVAL = 800;
+const MIN_SPAWN_INTERVAL = 280;
+const EARLY_WAVE_DURATION_MS = 8000;
+const EARLY_WAVE_SPEEDUP = 0.75;
+const BASE_MOB_SPEED = 4.5;
+const MAX_MOB_SPEED = 6.5;
 const MOB_RADIUS = 0.6;
 const BONUS_FRAME_EVERY = 14;
 const BONUS_FRAME_EXTRA_CHANCE = 0.1;
@@ -75,6 +75,66 @@ const bossMobMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.3,
   metalness: 0.6,
 });
+const skullCraniumMaterial = new THREE.MeshStandardMaterial({
+  color: 0x1a1a1a,
+  emissive: 0xff2200,
+  emissiveIntensity: 0.5,
+  roughness: 0.3,
+  metalness: 0.6,
+});
+const skullEyeMaterial = new THREE.MeshStandardMaterial({
+  color: 0x000000,
+  emissive: 0xff0000,
+  emissiveIntensity: 1.2,
+});
+const skullJawMaterial = new THREE.MeshStandardMaterial({
+  color: 0x222222,
+  emissive: 0x991100,
+  emissiveIntensity: 0.3,
+  roughness: 0.5,
+});
+const skullToothMaterial = new THREE.MeshStandardMaterial({ color: 0xccccaa, roughness: 0.6 });
+
+function createSkullMesh(scale) {
+  const group = new THREE.Group();
+  const s = scale;
+
+  const craniumGeo = new THREE.SphereGeometry(1.2 * s, 16, 16);
+  const cranium = new THREE.Mesh(craniumGeo, skullCraniumMaterial);
+  cranium.scale.set(1, 0.9, 1);
+  cranium.castShadow = true;
+  group.add(cranium);
+
+  const eyeGeo = new THREE.SphereGeometry(0.3 * s, 10, 10);
+  const leftEye = new THREE.Mesh(eyeGeo, skullEyeMaterial);
+  leftEye.position.set(-0.42 * s, 0.15 * s, 0.9 * s);
+  group.add(leftEye);
+  const rightEye = new THREE.Mesh(eyeGeo, skullEyeMaterial);
+  rightEye.position.set(0.42 * s, 0.15 * s, 0.9 * s);
+  group.add(rightEye);
+
+  const noseGeo = new THREE.BoxGeometry(0.15 * s, 0.25 * s, 0.15 * s);
+  const noseMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  nose.position.set(0, -0.15 * s, 1.0 * s);
+  group.add(nose);
+
+  const jawGeo = new THREE.BoxGeometry(0.9 * s, 0.2 * s, 0.4 * s);
+  const jaw = new THREE.Mesh(jawGeo, skullJawMaterial);
+  jaw.position.set(0, -0.65 * s, 0.7 * s);
+  jaw.castShadow = true;
+  group.add(jaw);
+
+  const toothGeo = new THREE.BoxGeometry(0.12 * s, 0.15 * s, 0.1 * s);
+  for (let i = -2; i <= 2; i++) {
+    const tooth = new THREE.Mesh(toothGeo, skullToothMaterial);
+    tooth.position.set(i * 0.18 * s, -0.5 * s, 0.95 * s);
+    group.add(tooth);
+  }
+
+  return group;
+}
+
 const bonusFrameGeometry = new THREE.TorusGeometry(1.5, 0.22, 16, 42);
 const bonusCoreGeometry = new THREE.SphereGeometry(0.7, 18, 14);
 const bonusWallGeometry = new THREE.BoxGeometry(4.2, 3.4, 0.45);
@@ -129,7 +189,7 @@ const particleGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
 const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
 
 function getSpawnInterval() {
-  const rampFactor = Math.min(elapsedTime / 120000, 1);
+  const rampFactor = Math.min(elapsedTime / 45000, 1);
   const baseInterval =
     BASE_SPAWN_INTERVAL - rampFactor * (BASE_SPAWN_INTERVAL - MIN_SPAWN_INTERVAL);
   const earlyFactor =
@@ -144,7 +204,7 @@ function getSpawnInterval() {
 }
 
 function getMobSpeed() {
-  const rampFactor = Math.min(elapsedTime / 190000, 1);
+  const rampFactor = Math.min(elapsedTime / 45000, 1);
   return BASE_MOB_SPEED + rampFactor * (MAX_MOB_SPEED - BASE_MOB_SPEED);
 }
 
@@ -314,12 +374,12 @@ function createHeartBadge() {
 
 function getMobType() {
   const r = Math.random();
-  const minutesElapsed = elapsedTime / 60000;
+  const secondsElapsed = elapsedTime / 1000;
 
-  if (minutesElapsed > 4.0 && r < 0.04) return 'boss';
-  if (minutesElapsed > 2.0 && r < 0.10) return 'heavy';
-  if (minutesElapsed > 1.5 && r < 0.18) return 'tank';
-  if (minutesElapsed > 0.5 && r < 0.30) return 'fast';
+  if (secondsElapsed > 45 && r < 0.06) return 'boss';
+  if (secondsElapsed > 30 && r < 0.12) return 'heavy';
+  if (secondsElapsed > 15 && r < 0.22) return 'tank';
+  if (secondsElapsed > 5 && r < 0.35) return 'fast';
   return 'basic';
 }
 
@@ -356,7 +416,50 @@ function spawnTrailingPowerup(scene, parentMob) {
   });
 }
 
-function spawnMob(scene, balanceFactor, score = 0) {
+export function spawnLevelBoss(scene, level) {
+  const levelMult = Math.pow(1.25, level - 1);
+  const hp = Math.round(30 * levelMult);
+  const speed = 2.0 + (level - 1) * 0.1;
+  const scale = 1.5 + (level - 1) * 0.08;
+  const radius = 1.8 * scale;
+
+  const mesh = createSkullMesh(scale);
+  mesh.position.set(0, radius + 0.05, SPAWN_Z);
+  mesh.castShadow = true;
+
+  const hitLabel = createHitIndicator();
+  hitLabel.sprite.position.set(0, radius + 1.0, 0);
+  mesh.add(hitLabel.sprite);
+  const hitIndicatorUpdaters = [hitLabel.update];
+  hitLabel.update(hp);
+
+  scene.add(mesh);
+
+  const mob = {
+    mesh,
+    type: 'level_boss',
+    hp,
+    speed,
+    radius,
+    bonusKind: null,
+    scored: false,
+    hitIndicatorUpdaters,
+    isLevelBoss: true,
+  };
+  activeMobs.push(mob);
+  return mob;
+}
+
+function spawnExplosionEffect(scene, position) {
+  const geo = new THREE.SphereGeometry(0.3, 12, 8);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(position);
+  scene.add(mesh);
+  deathParticles.push({ mesh, velocity: new THREE.Vector3(0, 0, 0), life: 0.4, isExplosion: true });
+}
+
+function spawnMob(scene, balanceFactor, score = 0, level = 1, levelMultiplier = 1) {
   const timeSinceBonus = elapsedTime - lastBonusSpawnAt;
   const timeSinceHeart = elapsedTime - lastHeartSpawnAt;
   const shouldForceBonus = score >= BONUS_FORCE_SCORE && timeSinceBonus > BONUS_FORCE_COOLDOWN_MS;
@@ -404,7 +507,7 @@ function spawnMob(scene, balanceFactor, score = 0) {
     mesh = group;
 
     hp = getBonusWallHits();
-    speed = getMobSpeed() * (1.0 + (balanceFactor - 1) * 0.2);
+    speed = getMobSpeed() * (1.0 + (balanceFactor - 1) * 0.2) * levelMultiplier;
     radius = 1.35;
     bonusFramesSpawned++;
     lastBonusSpawnAt = elapsedTime;
@@ -438,37 +541,43 @@ function spawnMob(scene, balanceFactor, score = 0) {
     mesh.add(heartOutline);
     mesh.add(badge);
     hp = HEART_HP;
-    speed = getMobSpeed() * 0.7;
+    speed = getMobSpeed() * 0.7 * levelMultiplier;
     radius = 0.8;
     lastHeartSpawnAt = elapsedTime;
   } else if (type === 'boss') {
-    const geo = new THREE.BoxGeometry(2.2, 2.2, 2.2);
+    hp = 20 + level * 3;
+    const sizeScale = 1 + 0.02 * (hp - 20);
+    const sz = 2.2 * sizeScale;
+    const geo = new THREE.BoxGeometry(sz, sz, sz);
     mesh = new THREE.Mesh(geo, bossMobMaterial);
-    hp = 20;
-    speed = getMobSpeed() * 0.35 * balanceFactor;
-    radius = 1.3;
+    speed = getMobSpeed() * 0.35 * balanceFactor * levelMultiplier;
+    radius = 1.3 * sizeScale;
   } else if (type === 'heavy') {
-    const geo = new THREE.BoxGeometry(1.7, 1.7, 1.7);
+    hp = 10 + Math.floor(level * 1.5);
+    const sizeScale = 1 + 0.04 * (hp - 10);
+    const sz = 1.7 * sizeScale;
+    const geo = new THREE.BoxGeometry(sz, sz, sz);
     mesh = new THREE.Mesh(geo, heavyMobMaterial);
-    hp = 10;
-    speed = getMobSpeed() * 0.5 * balanceFactor;
-    radius = 1.0;
+    speed = getMobSpeed() * 0.5 * balanceFactor * levelMultiplier;
+    radius = 1.0 * sizeScale;
   } else if (type === 'tank') {
-    const geo = new THREE.BoxGeometry(1.4, 1.4, 1.4);
+    hp = 3 + Math.floor(level / 2);
+    const sizeScale = 1 + 0.08 * (hp - 3);
+    const sz = 1.4 * sizeScale;
+    const geo = new THREE.BoxGeometry(sz, sz, sz);
     mesh = new THREE.Mesh(geo, tankMobMaterial);
-    hp = 3;
-    speed = getMobSpeed() * 0.6 * balanceFactor;
-    radius = 0.85;
+    speed = getMobSpeed() * 0.6 * balanceFactor * levelMultiplier;
+    radius = 0.85 * sizeScale;
   } else if (type === 'fast') {
     const geo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
     mesh = new THREE.Mesh(geo, fastMobMaterial);
     hp = 1;
-    speed = getMobSpeed() * 1.4 * balanceFactor;
+    speed = getMobSpeed() * 1.4 * balanceFactor * levelMultiplier;
     radius = 0.42;
   } else {
     mesh = new THREE.Mesh(mobGeometry, mobMaterial);
     hp = 1;
-    speed = getMobSpeed() * balanceFactor;
+    speed = getMobSpeed() * balanceFactor * levelMultiplier;
     radius = MOB_RADIUS;
   }
 
@@ -522,35 +631,51 @@ export function updateMobs(
   scene,
   delta,
   playerShotsPerSecond = BASE_PLAYER_SHOTS_PER_SEC,
-  score = 0
+  score = 0,
+  level = 1,
+  canSpawn = true
 ) {
   elapsedTime += delta;
   spawnTimer += delta;
 
+  const levelMultiplier = Math.pow(1.25, level - 1);
   const balanceFactor = getBalanceFactor(playerShotsPerSecond);
-  const interval = getSpawnInterval() / balanceFactor;
-  if (spawnTimer >= interval) {
-    spawnTimer -= interval;
-    spawnMob(scene, balanceFactor, score);
-    // Delay and soften adaptive spike spawns so difficulty ramps more gradually.
-    if (elapsedTime > 70000 && balanceFactor > 1.65 && Math.random() < 0.08) {
-      spawnMob(scene, balanceFactor, score);
+
+  if (canSpawn) {
+    const interval = getSpawnInterval() / balanceFactor / levelMultiplier;
+    if (spawnTimer >= interval) {
+      spawnTimer -= interval;
+      spawnMob(scene, balanceFactor, score, level, levelMultiplier);
+      if (elapsedTime > 20000 && balanceFactor > 1.5 && Math.random() < 0.12) {
+        spawnMob(scene, balanceFactor, score, level, levelMultiplier);
+      }
     }
   }
 
   const dt = delta / 1000;
   for (const mob of activeMobs) {
     mob.mesh.position.z += mob.speed * dt;
-    mob.mesh.rotation.y += dt * 1.5;
-    if (mob.type === 'bonus') {
-      mob.mesh.rotation.z += dt * 1.3;
-    } else if (mob.type === 'heart') {
-      mob.mesh.rotation.y += dt * 0.7;
-      mob.mesh.rotation.z = Math.sin(elapsedTime * 0.0025 + mob.mesh.position.x) * 0.15;
-    } else if (mob.type === 'trailing_powerup') {
-      mob.mesh.rotation.z += dt * 0.8;
+    if (mob.type === 'level_boss') {
+      const strafeRange = 5.0;
+      const strafeSpeed = 0.0018 + (mob.speed * 0.0003);
+      mob.mesh.position.x = Math.sin(elapsedTime * strafeSpeed + mob.radius) * strafeRange;
+      mob.mesh.rotation.y = Math.sin(elapsedTime * 0.002) * 0.3;
+      mob.mesh.position.y = mob.radius + 0.05 + Math.sin(elapsedTime * 0.003) * 0.25;
+      const pulse = 0.4 + Math.sin(elapsedTime * 0.005) * 0.25;
+      mob.mesh.children[0]?.material?.emissiveIntensity !== undefined &&
+        (mob.mesh.children[0].material.emissiveIntensity = pulse);
+    } else {
+      mob.mesh.rotation.y += dt * 1.5;
+      if (mob.type === 'bonus') {
+        mob.mesh.rotation.z += dt * 1.3;
+      } else if (mob.type === 'heart') {
+        mob.mesh.rotation.y += dt * 0.7;
+        mob.mesh.rotation.z = Math.sin(elapsedTime * 0.0025 + mob.mesh.position.x) * 0.15;
+      } else if (mob.type === 'trailing_powerup') {
+        mob.mesh.rotation.z += dt * 0.8;
+      }
+      mob.mesh.position.y = mob.radius + 0.05 + Math.sin(elapsedTime * 0.003 + mob.mesh.position.x * 2) * 0.08;
     }
-    mob.mesh.position.y = mob.radius + 0.05 + Math.sin(elapsedTime * 0.003 + mob.mesh.position.x * 2) * 0.08;
   }
 
   updateParticles(scene, dt);
@@ -559,6 +684,7 @@ export function updateMobs(
 export function checkMobUnitCollisions(scene, units, onMobKilled) {
   const toRemoveUnits = [];
   const toRemoveMobs = [];
+  const BLAST_RADIUS = 2.5;
 
   for (const mob of activeMobs) {
     if (mob.scored) continue;
@@ -588,6 +714,28 @@ export function checkMobUnitCollisions(scene, units, onMobKilled) {
           spawnDeathParticles(scene, mPos);
           if (onMobKilled) onMobKilled(mob);
         }
+
+        if (unit.explosive) {
+          spawnExplosionEffect(scene, mPos);
+          for (const other of activeMobs) {
+            if (other === mob || other.scored) continue;
+            const ox = other.mesh.position.x - mPos.x;
+            const oy = other.mesh.position.y - mPos.y;
+            const oz = other.mesh.position.z - mPos.z;
+            const od = ox * ox + oy * oy + oz * oz;
+            if (od < BLAST_RADIUS * BLAST_RADIUS) {
+              other.hp--;
+              updateHitIndicators(other);
+              if (other.hp <= 0 && !other.scored) {
+                other.scored = true;
+                toRemoveMobs.push(other);
+                spawnDeathParticles(scene, other.mesh.position);
+                if (onMobKilled) onMobKilled(other);
+              }
+            }
+          }
+        }
+
         break;
       }
     }
@@ -634,12 +782,23 @@ function updateParticles(scene, dt) {
   for (let i = deathParticles.length - 1; i >= 0; i--) {
     const p = deathParticles[i];
     p.life -= dt;
-    p.velocity.y -= 9.81 * dt;
-    p.mesh.position.addScaledVector(p.velocity, dt);
-    p.mesh.scale.setScalar(Math.max(p.life / 0.6, 0.01));
+
+    if (p.isExplosion) {
+      const progress = 1 - p.life / 0.4;
+      p.mesh.scale.setScalar(1 + progress * 6);
+      p.mesh.material.opacity = Math.max((1 - progress) * 0.8, 0);
+    } else {
+      p.velocity.y -= 9.81 * dt;
+      p.mesh.position.addScaledVector(p.velocity, dt);
+      p.mesh.scale.setScalar(Math.max(p.life / 0.6, 0.01));
+    }
 
     if (p.life <= 0) {
       scene.remove(p.mesh);
+      if (p.isExplosion) {
+        p.mesh.geometry.dispose();
+        p.mesh.material.dispose();
+      }
       deathParticles.splice(i, 1);
     }
   }

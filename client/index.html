@@ -164,6 +164,57 @@
       margin-top: 2px;
     }
 
+    #boss-warning {
+      position: fixed;
+      top: 28%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ff2200;
+      font-size: 3rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 6px;
+      z-index: 80;
+      display: none;
+      text-shadow: 0 0 20px rgba(255,34,0,0.8), 0 0 40px rgba(255,34,0,0.4);
+      animation: bossWarningPulse 0.8s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes bossWarningPulse {
+      0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+      50% { opacity: 0.7; transform: translateX(-50%) scale(1.08); }
+    }
+
+    #level-complete-overlay {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7);
+      z-index: 90;
+      pointer-events: none;
+    }
+    #level-complete-box {
+      text-align: center;
+      animation: levelCompletePopIn 0.4s ease-out;
+    }
+    #level-complete-title {
+      color: #ffd700;
+      font-size: 3.5rem;
+      text-transform: uppercase;
+      letter-spacing: 6px;
+      text-shadow: 0 0 30px rgba(255,215,0,0.6), 0 0 60px rgba(255,215,0,0.3);
+      margin-bottom: 12px;
+    }
+    #level-complete-subtitle {
+      color: #ccc;
+      font-size: 1.2rem;
+      letter-spacing: 1px;
+    }
+    @keyframes levelCompletePopIn {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
     #powerups-hud {
       position: fixed;
       top: 116px; left: 16px;
@@ -297,7 +348,7 @@
   <div id="lives-hud"><span id="lives-value">20</span></div>
   <div id="level-hud">
     Level <span id="level-value">1</span>
-    <small>Next: <span id="next-level-value">100 score</span></small>
+    <small><span id="level-timer-value">3:00</span></small>
   </div>
   <div id="powerups-hud">
     <h3>Active Power-Ups</h3>
@@ -306,6 +357,17 @@
     </ul>
   </div>
   <div id="controls-hint">&larr; &rarr; Arrow Keys to Move</div>
+
+  <!-- Boss Warning -->
+  <div id="boss-warning">BOSS INCOMING</div>
+
+  <!-- Level Complete -->
+  <div id="level-complete-overlay">
+    <div id="level-complete-box">
+      <h1 id="level-complete-title">LEVEL 1 COMPLETE!</h1>
+      <p id="level-complete-subtitle">Choose your power-up!</p>
+    </div>
+  </div>
 
   <!-- Game Over -->
   <div id="gameover-overlay">

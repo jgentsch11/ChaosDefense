@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { spawnBlueNormie } from './units.js';
 
-const FIRE_INTERVAL_MS = 650;
+const FIRE_INTERVAL_MS = 420;
 const LAUNCH_SPEED = 12;
 const LANE_HALF_WIDTH = 7.2;
 const MOVE_SPEED = 8;
@@ -10,10 +10,13 @@ const RAPID_FIRE_DURATION_MS = 9000;
 const PIERCING_DURATION_MS = 9000;
 const DOUBLE_SHOT_DURATION_MS = 11000;
 const TRIPLE_SHOT_DURATION_MS = 10000;
+const WIDE_CANNON_DURATION_MS = 12000;
+const EXPLOSIVE_DURATION_MS = 12000;
 const BASE_SHOOTER_COUNT = 1;
 const SHOOTER_SPACING = 0.9;
-const LEVEL_FIRE_RATE_STEP = 0.1;
-const MAX_LEVEL_FIRE_RATE_MULTIPLIER = 2.25;
+const WIDE_CANNON_SPACING = 1.2;
+const LEVEL_FIRE_RATE_STEP = 0.15;
+const MAX_LEVEL_FIRE_RATE_MULTIPLIER = 3.5;
 
 let cannonMesh = null;
 let muzzleFlash = null;
@@ -26,6 +29,8 @@ let rapidFireUntil = 0;
 let piercingUntil = 0;
 let doubleShotUntil = 0;
 let tripleShotUntil = 0;
+let wideCannonUntil = 0;
+let explosiveUntil = 0;
 let levelFireRateMultiplier = 1;
 
 export function createCannon(scene) {
@@ -62,6 +67,8 @@ export function createCannon(scene) {
   piercingUntil = 0;
   doubleShotUntil = 0;
   tripleShotUntil = 0;
+  wideCannonUntil = 0;
+  explosiveUntil = 0;
   levelFireRateMultiplier = 1;
   return group;
 }
@@ -78,9 +85,8 @@ export function setupControls() {
   });
 }
 
-export function updateCannon(scene, time) {
+export function updateCannon(scene, time, canFire = true) {
   if (!cannonMesh) return;
-  const fireInterval = getCurrentFireInterval(time);
 
   const dt = lastCannonTime === 0 ? 0.016 : Math.min((time - lastCannonTime) / 1000, 0.1);
   lastCannonTime = time;
@@ -89,13 +95,18 @@ export function updateCannon(scene, time) {
   cannonMesh.position.x += moveDir * MOVE_SPEED * dt;
   cannonMesh.position.x = THREE.MathUtils.clamp(cannonMesh.position.x, -LANE_HALF_WIDTH, LANE_HALF_WIDTH);
 
-  if (!Number.isFinite(lastFireTime) || time < lastFireTime) {
-    lastFireTime = time - fireInterval;
-  }
+  const targetScaleX = time < wideCannonUntil ? 1.5 : 1.0;
+  cannonMesh.scale.x = THREE.MathUtils.lerp(cannonMesh.scale.x, targetScaleX, 0.1);
 
-  if (time - lastFireTime >= fireInterval) {
-    lastFireTime = time;
-    fireVolley(scene, time);
+  if (canFire) {
+    const fireInterval = getCurrentFireInterval(time);
+    if (!Number.isFinite(lastFireTime) || time < lastFireTime) {
+      lastFireTime = time - fireInterval;
+    }
+    if (time - lastFireTime >= fireInterval) {
+      lastFireTime = time;
+      fireVolley(scene, time);
+    }
   }
 
   if (muzzleFlash && flashTimer > 0) {
@@ -106,9 +117,11 @@ export function updateCannon(scene, time) {
 
 function fireVolley(scene, time) {
   const shooterCount = getCurrentShooterCount(time);
+  const isWide = time < wideCannonUntil;
+  const spacing = isWide ? WIDE_CANNON_SPACING : SHOOTER_SPACING;
   for (let i = 0; i < shooterCount; i++) {
     const laneOffset = i - (shooterCount - 1) / 2;
-    fireUnit(scene, laneOffset * SHOOTER_SPACING, time);
+    fireUnit(scene, laneOffset * spacing, time);
   }
 
   flashTimer = 0.08;
@@ -128,8 +141,10 @@ function fireUnit(scene, xOffset = 0, time = performance.now()) {
   const velocity = new THREE.Vector3(spread, 0.5, -LAUNCH_SPEED);
 
   const isPiercingActive = time < piercingUntil;
+  const isExplosive = time < explosiveUntil;
   spawnBlueNormie(scene, pos, velocity, {
     pierceAll: isPiercingActive,
+    explosive: isExplosive,
   });
 }
 
@@ -157,6 +172,19 @@ export function activateTripleShotBonus(durationMs = TRIPLE_SHOT_DURATION_MS) {
   tripleShotUntil = performance.now() + durationMs;
 }
 
+export function activateWideCannon(durationMs = WIDE_CANNON_DURATION_MS) {
+  wideCannonUntil = performance.now() + durationMs;
+}
+
+export function activateExplosiveShots(durationMs = EXPLOSIVE_DURATION_MS) {
+  explosiveUntil = performance.now() + durationMs;
+}
+
+export function getCannonPosition() {
+  if (!cannonMesh) return { x: 0, z: 8 };
+  return { x: cannonMesh.position.x, z: cannonMesh.position.z };
+}
+
 export function setLevelFireRateBoost(level) {
   const safeLevel = Number.isFinite(level) ? Math.max(1, Math.floor(level)) : 1;
   const rawMultiplier = 1 + (safeLevel - 1) * LEVEL_FIRE_RATE_STEP;
@@ -168,6 +196,7 @@ export function setLevelFireRateBoost(level) {
 }
 
 function getCurrentShooterCount(time) {
+  if (time < wideCannonUntil) return 5;
   return BASE_SHOOTER_COUNT + getExtraShots(time);
 }
 
@@ -193,11 +222,17 @@ export function getActivePowerups(time = performance.now()) {
 
   const doubleShotMs = Math.max(doubleShotUntil - time, 0);
   const tripleShotMs = Math.max(tripleShotUntil - time, 0);
-  if (tripleShotMs > 0) {
+  const wideMs = Math.max(wideCannonUntil - time, 0);
+  if (wideMs > 0) {
+    active.push({ id: 'wide', label: 'Wide Cannon', msRemaining: wideMs });
+  } else if (tripleShotMs > 0) {
     active.push({ id: 'triple', label: 'Triple Shot', msRemaining: tripleShotMs });
   } else if (doubleShotMs > 0) {
     active.push({ id: 'double', label: 'Double Shot', msRemaining: doubleShotMs });
   }
+
+  const explosiveMs = Math.max(explosiveUntil - time, 0);
+  if (explosiveMs > 0) active.push({ id: 'explosive', label: 'Explosive Shots', msRemaining: explosiveMs });
 
   return active;
 }

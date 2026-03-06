@@ -1,6 +1,17 @@
 import * as THREE from 'three';
 import { initPhysics, stepPhysics, getWorld, createStaticBody } from './physics.js';
-import { initUI, updateScoreHUD, updateLivesHUD, updateLevelHUD, updatePowerupsHUD, showGameOver } from './ui.js';
+import {
+  initUI,
+  updateScoreHUD,
+  updateLivesHUD,
+  updateLevelHUD,
+  updateLevelTimer,
+  updatePowerupsHUD,
+  showGameOver,
+  showBossWarning,
+  hideBossWarning,
+  showLevelComplete,
+} from './ui.js';
 import { sendScore } from './network.js';
 import {
   createCannon,
@@ -10,9 +21,12 @@ import {
   activatePiercingBonus,
   activateDoubleShotBonus,
   activateTripleShotBonus,
+  activateWideCannon,
+  activateExplosiveShots,
   setLevelFireRateBoost,
   getActivePowerups,
   getPlayerShotRate,
+  getCannonPosition,
 } from './cannon.js';
 import { createEnemyBase, getEndZoneZ } from './enemies.js';
 import { syncUnits, cleanupFallenUnits, getActiveUnits, removeUnit, resetUnits } from './units.js';
@@ -22,6 +36,8 @@ import {
   checkMobsReachedBase,
   removeMob,
   resetMobs,
+  getActiveMobs,
+  spawnLevelBoss,
 } from './mobs.js';
 
 let scene, camera, renderer;
@@ -35,11 +51,19 @@ let roadScrollMinZ = -19;
 let roadScrollMaxZ = 10;
 const ROAD_SCROLL_SPEED = 9;
 
+const LEVEL_DURATION_MS = 60000;
+const BOSS_WARNING_TIME_MS = 55000;
+
+let levelState = 'playing';
+let levelElapsed = 0;
+let powerupPickups = [];
+
 async function startGame(username) {
   try {
     if (scene) {
       resetUnits(scene);
       resetMobs(scene);
+      clearPowerupPickups();
     }
 
     await initPhysics();
@@ -47,11 +71,15 @@ async function startGame(username) {
     score = 0;
     lives = 5;
     currentLevel = 1;
+    levelState = 'playing';
+    levelElapsed = 0;
     updateScoreHUD(score);
     updateLivesHUD(lives);
-    updateLevelHUD(currentLevel, getNextLevelScore(currentLevel));
+    updateLevelHUD(currentLevel);
+    updateLevelTimer(LEVEL_DURATION_MS / 1000);
     setLevelFireRateBoost(currentLevel);
     updatePowerupsHUD([]);
+    hideBossWarning();
 
     initScene();
     buildLane();
@@ -63,9 +91,6 @@ async function startGame(username) {
     lastTime = performance.now();
     requestAnimationFrame(gameLoop);
   } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7330/ingest/cb392d2b-0b6c-48b4-9afd-15916ccaf411',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bd77b5'},body:JSON.stringify({sessionId:'bd77b5',location:'main.js:startGame',message:'startGame failed',data:{errMsg:err.message},hypothesisId:'C',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.error('startGame failed:', err);
     showError(err.message);
   }
@@ -133,7 +158,6 @@ function buildLane() {
   const laneWidth = 16;
   const halfWidth = laneWidth / 2;
 
-  // Left half floor — horde side (dark red tint)
   const leftGeo = new THREE.BoxGeometry(halfWidth, 0.2, laneLength);
   const leftMat = new THREE.MeshStandardMaterial({ color: 0x3a2030, roughness: 0.7 });
   const leftFloor = new THREE.Mesh(leftGeo, leftMat);
@@ -141,7 +165,6 @@ function buildLane() {
   leftFloor.receiveShadow = true;
   scene.add(leftFloor);
 
-  // Right half floor — enemy lane accent
   const rightGeo = new THREE.BoxGeometry(halfWidth, 0.2, laneLength);
   const rightMat = new THREE.MeshStandardMaterial({ color: 0x2d243e, roughness: 0.7 });
   const rightFloor = new THREE.Mesh(rightGeo, rightMat);
@@ -149,16 +172,11 @@ function buildLane() {
   rightFloor.receiveShadow = true;
   scene.add(rightFloor);
 
-  // Physics body for full lane floor
   createStaticBody(getWorld(), { x: 0, y: -0.1, z: -4 }, { x: halfWidth, y: 0.1, z: laneLength / 2 });
 
-  // Keep center lane visually clear so shots have no perceived obstruction.
-
-  // Side labels near the cannon end
   addLaneLabel(scene, 'HORDE', -4.0, 10, '#e94560');
   addLaneLabel(scene, 'ENEMY', 4.0, 10, '#8b7dff');
 
-  // Walls
   const wallHeight = 0.8;
   const wallThickness = 0.15;
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x1a4a80, transparent: true, opacity: 0.6 });
@@ -206,14 +224,12 @@ function addLaneMarkings(laneWidth, laneLength) {
   roadScrollMaxZ = -4 + laneLength / 2 - 1.2;
 
   for (let z = roadScrollMaxZ; z > roadScrollMinZ; z -= 2.8) {
-    // Left side dashes
     const lineL = new THREE.Mesh(lineGeo, lineMat);
     lineL.rotation.x = -Math.PI / 2;
     lineL.position.set(-laneCenterOffset, 0.01, z);
     scene.add(lineL);
     roadMarkings.push(lineL);
 
-    // Right side dashes
     const lineR = new THREE.Mesh(lineGeo, lineMat);
     lineR.rotation.x = -Math.PI / 2;
     lineR.position.set(laneCenterOffset, 0.01, z);
@@ -235,7 +251,6 @@ function updateRoadMotion(deltaMs) {
 
 function checkScoring() {
   const units = getActiveUnits();
-  // Score/remove units ahead of the base collider so they cannot pile up at spawn.
   const scoreZ = getEndZoneZ() + 1.4;
 
   for (const unit of [...units]) {
@@ -264,22 +279,28 @@ function processMobCollisions() {
       applyBonusEffect(mob.bonusKind);
     }
 
+    if (mob.isLevelBoss) {
+      onLevelBossKilled();
+    }
+
     const points =
       mob.type === 'heart'
         ? 0
-        : mob.type === 'boss'
-          ? 50
-          : mob.type === 'heavy'
-            ? 20
-            : mob.type === 'tank'
-              ? 5
-              : mob.type === 'trailing_powerup'
-                ? 3
-                : mob.type === 'fast'
-                  ? 2
-                  : mob.type === 'bonus'
-                    ? 8
-                    : 1;
+        : mob.isLevelBoss
+          ? 100
+          : mob.type === 'boss'
+            ? 50
+            : mob.type === 'heavy'
+              ? 20
+              : mob.type === 'tank'
+                ? 5
+                : mob.type === 'trailing_powerup'
+                  ? 3
+                  : mob.type === 'fast'
+                    ? 2
+                    : mob.type === 'bonus'
+                      ? 8
+                      : 1;
     addScore(points);
   });
 
@@ -291,9 +312,33 @@ function processMobCollisions() {
   }
 }
 
+function onLevelBossKilled() {
+  levelState = 'level_complete';
+  hideBossWarning();
+
+  setTimeout(() => {
+    resetMobs(scene);
+    resetUnits(scene);
+  }, 400);
+
+  showLevelComplete(currentLevel, () => {
+    levelState = 'powerup_select';
+    resetMobs(scene);
+    resetUnits(scene);
+    spawnPowerupPickups();
+  });
+}
+
 function processMobsAtBase() {
   const reached = checkMobsReachedBase();
   for (const mob of reached) {
+    if (mob.isLevelBoss) {
+      lives = 0;
+      updateLivesHUD(lives);
+      removeMob(scene, mob);
+      break;
+    }
+
     if (mob.type === 'heart') {
       lives = Math.min(lives + 1, MAX_LIVES);
       updateLivesHUD(lives);
@@ -310,6 +355,7 @@ function processMobsAtBase() {
     showGameOver(score, () => {
       resetUnits(scene);
       resetMobs(scene);
+      clearPowerupPickups();
       startGame('');
     });
   }
@@ -320,18 +366,14 @@ function applyBonusEffect(bonusKind) {
     activateRapidFire();
     return;
   }
-
   if (bonusKind === 'pierce') {
     activatePiercingBonus();
     return;
   }
-
   if (bonusKind === 'shooter') {
     activateDoubleShotBonus();
     return;
   }
-
-  // Safety fallback in case a bonus type is missing or malformed.
   activateRapidFire();
 }
 
@@ -340,50 +382,166 @@ function addScore(points) {
   score += points;
   updateScoreHUD(score);
   sendScore(score);
-  checkLevelUps();
 }
 
-function getLevelForScore(value) {
-  if (value < 100) return 1;
-  return 2 + Math.floor((value - 100) / 200);
-}
+// ── Power-Up Pickup System ─────────────────────────────────
 
-function getNextLevelScore(level) {
-  if (level < 1) return 100;
-  if (level === 1) return 100;
-  return 100 + (level - 1) * 200;
-}
+const POWERUP_POOL = [
+  { id: 'rapid', label: 'RAPID FIRE', color: 0x4dd6ff, activate: () => activateRapidFire(12000) },
+  { id: 'double', label: 'DOUBLE SHOT', color: 0xffcc44, activate: () => activateDoubleShotBonus(13000) },
+  { id: 'triple', label: 'TRIPLE SHOT', color: 0xff44aa, activate: () => activateTripleShotBonus(10500) },
+  { id: 'pierce', label: 'PIERCING', color: 0xcc77ff, activate: () => activatePiercingBonus(9000) },
+  { id: 'wide', label: 'WIDE CANNON', color: 0x44ff88, activate: () => activateWideCannon(12000) },
+  { id: 'explosive', label: 'EXPLOSIVE', color: 0xff6600, activate: () => activateExplosiveShots(12000) },
+];
 
-function grantLevelUpPowerup(level) {
-  const lowTier = ['rapid', 'double', 'pierce'];
-  const highTier = ['rapid', 'double', 'pierce', 'triple'];
-  const pool = level >= 3 ? highTier : lowTier;
-  const roll = pool[Math.floor(Math.random() * pool.length)];
+const PICKUP_SPAWN_Z = -15;
+const PICKUP_SPEED = 3.5;
 
-  if (roll === 'rapid') {
-    activateRapidFire(12000);
-    return;
+function spawnPowerupPickups() {
+  clearPowerupPickups();
+
+  const shuffled = [...POWERUP_POOL].sort(() => Math.random() - 0.5);
+  const chosen = shuffled.slice(0, 3);
+  const xPositions = [-4, 0, 4];
+
+  for (let i = 0; i < 3; i++) {
+    const def = chosen[i];
+    const group = new THREE.Group();
+
+    const geo = new THREE.SphereGeometry(0.8, 16, 16);
+    const mat = new THREE.MeshStandardMaterial({
+      color: def.color,
+      emissive: def.color,
+      emissiveIntensity: 0.6,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const sphere = new THREE.Mesh(geo, mat);
+    sphere.castShadow = true;
+    group.add(sphere);
+
+    const ringGeo = new THREE.TorusGeometry(1.1, 0.08, 8, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.5 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+
+    const badge = createPickupLabel(def.label, def.color);
+    badge.position.set(0, 1.8, 0);
+    group.add(badge);
+
+    group.position.set(xPositions[i], 1.2, PICKUP_SPAWN_Z);
+    scene.add(group);
+
+    powerupPickups.push({
+      mesh: group,
+      def,
+      baseY: 1.2,
+      speed: PICKUP_SPEED,
+      spawnTime: performance.now(),
+    });
   }
-  if (roll === 'pierce') {
-    activatePiercingBonus(12000);
-    return;
-  }
-  if (roll === 'triple') {
-    activateTripleShotBonus(10500);
-    return;
-  }
-  activateDoubleShotBonus(13000);
 }
 
-function checkLevelUps() {
-  const computedLevel = getLevelForScore(score);
-  while (currentLevel < computedLevel) {
-    currentLevel++;
-    setLevelFireRateBoost(currentLevel);
-    grantLevelUpPowerup(currentLevel);
-  }
-  updateLevelHUD(currentLevel, getNextLevelScore(currentLevel));
+function createPickupLabel(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 80;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(6, 12, 24, 0.85)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const hex = '#' + new THREE.Color(color).getHexString();
+  ctx.strokeStyle = hex;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+  ctx.fillStyle = hex;
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(2.8, 0.7, 1);
+  sprite.userData.disposeLabel = () => {
+    texture.dispose();
+    material.dispose();
+  };
+  return sprite;
 }
+
+function updatePowerupPickups(time, delta) {
+  const dt = delta / 1000;
+  for (const pickup of powerupPickups) {
+    pickup.mesh.position.z += pickup.speed * dt;
+    const age = (time - pickup.spawnTime) / 1000;
+    pickup.mesh.position.y = pickup.baseY + Math.sin(age * 2.5) * 0.25;
+    pickup.mesh.rotation.y += 0.02;
+  }
+
+  // Remove pickups that drift past the cannon without being collected
+  const expired = powerupPickups.filter(p => p.mesh.position.z > 14);
+  for (const p of expired) {
+    p.mesh.traverse((child) => {
+      if (typeof child.userData?.disposeLabel === 'function') {
+        child.userData.disposeLabel();
+      }
+    });
+    scene.remove(p.mesh);
+  }
+  if (expired.length > 0) {
+    powerupPickups = powerupPickups.filter(p => p.mesh.position.z <= 14);
+  }
+
+  // If all pickups are gone without a pick, respawn a fresh set
+  if (powerupPickups.length === 0 && levelState === 'powerup_select') {
+    spawnPowerupPickups();
+  }
+}
+
+function checkPowerupPickupCollision() {
+  const cannonPos = getCannonPosition();
+  const PICKUP_RADIUS = 2.0;
+
+  for (const pickup of powerupPickups) {
+    const dx = cannonPos.x - pickup.mesh.position.x;
+    const dz = cannonPos.z - pickup.mesh.position.z;
+    const distSq = dx * dx + dz * dz;
+
+    if (distSq < PICKUP_RADIUS * PICKUP_RADIUS) {
+      pickup.def.activate();
+      clearPowerupPickups();
+      startNextLevel();
+      return;
+    }
+  }
+}
+
+function clearPowerupPickups() {
+  for (const pickup of powerupPickups) {
+    pickup.mesh.traverse((child) => {
+      if (typeof child.userData?.disposeLabel === 'function') {
+        child.userData.disposeLabel();
+      }
+    });
+    scene.remove(pickup.mesh);
+  }
+  powerupPickups = [];
+}
+
+function startNextLevel() {
+  currentLevel++;
+  levelElapsed = 0;
+  levelState = 'playing';
+  setLevelFireRateBoost(currentLevel);
+  updateLevelHUD(currentLevel);
+  updateLevelTimer(LEVEL_DURATION_MS / 1000);
+}
+
+// ── Game Loop ──────────────────────────────────────────────
 
 let lastTime = 0;
 function gameLoop(timestamp) {
@@ -395,36 +553,71 @@ function gameLoop(timestamp) {
     const delta = Math.min(timestamp - lastTime, 100);
     lastTime = timestamp;
 
+    const canFire =
+      levelState === 'playing' ||
+      levelState === 'boss_warning' ||
+      levelState === 'boss_fight';
+
     lastStep = 'updateCannon';
-    updateCannon(scene, timestamp);
+    updateCannon(scene, timestamp, canFire);
     lastStep = 'stepPhysics';
     stepPhysics();
     lastStep = 'syncUnits';
     syncUnits();
-    lastStep = 'checkScoring';
-    checkScoring();
-    lastStep = 'updateRoadMotion';
-    updateRoadMotion(delta);
 
-    lastStep = 'updateMobs';
-    updateMobs(scene, delta, getPlayerShotRate(timestamp), score);
-    lastStep = 'updatePowerupsHUD';
-    updatePowerupsHUD(getActivePowerups(timestamp));
-    lastStep = 'processMobCollisions';
-    processMobCollisions();
-    lastStep = 'processMobsAtBase';
-    processMobsAtBase();
+    if (levelState === 'playing' || levelState === 'boss_warning' || levelState === 'boss_fight') {
+      lastStep = 'checkScoring';
+      checkScoring();
+      lastStep = 'updateRoadMotion';
+      updateRoadMotion(delta);
 
-    lastStep = 'cleanupFallenUnits';
-    cleanupFallenUnits(scene);
+      const canSpawn = levelState === 'playing';
+      lastStep = 'updateMobs';
+      updateMobs(scene, delta, getPlayerShotRate(timestamp), score, currentLevel, canSpawn);
+      lastStep = 'updatePowerupsHUD';
+      updatePowerupsHUD(getActivePowerups(timestamp));
+      lastStep = 'processMobCollisions';
+      processMobCollisions();
+      lastStep = 'processMobsAtBase';
+      processMobsAtBase();
+      lastStep = 'cleanupFallenUnits';
+      cleanupFallenUnits(scene);
+
+      if (levelState === 'playing' || levelState === 'boss_warning') {
+        levelElapsed += delta;
+        const remaining = Math.max(0, (LEVEL_DURATION_MS - levelElapsed) / 1000);
+        updateLevelTimer(remaining);
+      }
+
+      if (levelState === 'playing' && levelElapsed >= BOSS_WARNING_TIME_MS) {
+        levelState = 'boss_warning';
+        showBossWarning();
+      }
+
+      if (levelState === 'boss_warning' && levelElapsed >= LEVEL_DURATION_MS) {
+        levelState = 'boss_fight';
+        hideBossWarning();
+        const remainingMobs = [...getActiveMobs()];
+        for (const mob of remainingMobs) {
+          removeMob(scene, mob);
+        }
+        spawnLevelBoss(scene, currentLevel);
+        updateLevelTimer(0);
+
+        const timerEl = document.getElementById('level-timer-value');
+        if (timerEl) timerEl.textContent = 'BOSS FIGHT';
+      }
+    } else if (levelState === 'powerup_select') {
+      lastStep = 'updatePowerupPickups';
+      updatePowerupPickups(timestamp, delta);
+      checkPowerupPickupCollision();
+      updateRoadMotion(delta);
+    }
 
     lastStep = 'render';
     renderer.render(scene, camera);
   } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7330/ingest/cb392d2b-0b6c-48b4-9afd-15916ccaf411',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bd77b5'},body:JSON.stringify({sessionId:'bd77b5',location:'main.js:gameLoop',message:'gameLoop error',data:{lastStep,errMsg:err.message,errName:err?.name},hypothesisId:'E',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    console.error('gameLoop error:', err);
+    console.error('gameLoop error at', lastStep, ':', err);
     gameRunning = false;
     showError(err.message);
   }

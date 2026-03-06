@@ -67,17 +67,39 @@ export function updateLivesHUD(lives) {
   el.classList.add('damage');
 }
 
-export function updateLevelHUD(level, nextLevelScore) {
+export function updateLevelHUD(level) {
   const levelValue = document.getElementById('level-value');
-  const nextValue = document.getElementById('next-level-value');
-  if (!levelValue || !nextValue) return;
+  if (levelValue) levelValue.textContent = String(level);
+}
 
-  levelValue.textContent = String(level);
-  if (Number.isFinite(nextLevelScore)) {
-    nextValue.textContent = `${nextLevelScore.toLocaleString()} score`;
-  } else {
-    nextValue.textContent = 'MAX';
-  }
+export function updateLevelTimer(secondsRemaining) {
+  const el = document.getElementById('level-timer-value');
+  if (!el) return;
+  const mins = Math.floor(secondsRemaining / 60);
+  const secs = Math.floor(secondsRemaining % 60);
+  el.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+export function showBossWarning() {
+  const el = document.getElementById('boss-warning');
+  if (el) el.style.display = 'block';
+}
+
+export function hideBossWarning() {
+  const el = document.getElementById('boss-warning');
+  if (el) el.style.display = 'none';
+}
+
+export function showLevelComplete(level, callback) {
+  const overlay = document.getElementById('level-complete-overlay');
+  const title = document.getElementById('level-complete-title');
+  if (title) title.textContent = `LEVEL ${level} COMPLETE!`;
+  if (overlay) overlay.style.display = 'flex';
+
+  setTimeout(() => {
+    if (overlay) overlay.style.display = 'none';
+    if (callback) callback();
+  }, 2000);
 }
 
 export function updatePowerupsHUD(powerups) {

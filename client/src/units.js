@@ -16,6 +16,11 @@ const blueMaterial = new THREE.MeshStandardMaterial({
   emissive: 0x2266cc,
   emissiveIntensity: 0.5,
 });
+const explosiveMaterial = new THREE.MeshStandardMaterial({
+  color: 0xff6600,
+  emissive: 0xff4400,
+  emissiveIntensity: 0.6,
+});
 const goldMaterial = new THREE.MeshStandardMaterial({
   color: 0xffd700,
   metalness: 0.6,
@@ -29,7 +34,9 @@ export function getActiveUnits() {
 export function spawnBlueNormie(scene, position, velocity, options = {}) {
   recycleIfAtCap(scene);
 
-  const mesh = new THREE.Mesh(unitGeometry, blueMaterial);
+  const isExplosive = options.explosive ?? false;
+  const mat = isExplosive ? explosiveMaterial : blueMaterial;
+  const mesh = new THREE.Mesh(unitGeometry, mat);
   mesh.position.copy(position);
   mesh.castShadow = true;
   scene.add(mesh);
@@ -48,6 +55,7 @@ export function spawnBlueNormie(scene, position, velocity, options = {}) {
     spawnedAt: performance.now(),
     canTriggerGates: options.canTriggerGates ?? true,
     pierceAll: options.pierceAll ?? false,
+    explosive: isExplosive,
   };
   activeUnits.push(unit);
   return unit;
