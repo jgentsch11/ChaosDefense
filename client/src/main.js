@@ -43,7 +43,7 @@ import {
 
 let scene, camera, renderer;
 let score = 0;
-let lives = 5;
+let lives = 6;
 let currentLevel = 1;
 const MAX_LIVES = 10;
 let gameRunning = false;
@@ -344,7 +344,7 @@ function processMobsAtBase() {
       lives = Math.min(lives + 1, MAX_LIVES);
       updateLivesHUD(lives);
     } else if (mob.type !== 'bonus' && mob.type !== 'trailing_powerup') {
-      const damage = mob.type === 'boss' ? 3 : mob.type === 'heavy' ? 2 : 1;
+      const damage = mob.type === 'boss' ? 2 : mob.type === 'heavy' ? 2 : 1;
       lives -= damage;
       updateLivesHUD(lives);
     }
@@ -402,11 +402,23 @@ const PICKUP_SPEED = 3.5;
 function spawnPowerupPickups() {
   clearPowerupPickups();
 
-  const shuffled = [...POWERUP_POOL].sort(() => Math.random() - 0.5);
-  const chosen = shuffled.slice(0, 3);
-  const xPositions = [-4, 0, 4];
+  const weights = {
+    double: 5,
+    triple: 3,
+    rapid: 1,
+    pierce: 3,
+    wide: 3,
+    explosive: 6,
+  };
+  const weighted = [...POWERUP_POOL].sort((a, b) => {
+    const wa = weights[a.id] || 1;
+    const wb = weights[b.id] || 1;
+    return (Math.random() / wa) - (Math.random() / wb);
+  });
+  const chosen = weighted.slice(0, 4);
+  const xPositions = [-6, -2, 2, 6];
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const def = chosen[i];
     const group = new THREE.Group();
 

@@ -19,18 +19,18 @@ const RIGHT_LANE_X_MIN = 0.8;
 const RIGHT_LANE_X_MAX = 7.2;
 const BONUS_SAFE_RIGHT_X_MIN = 2.9;
 
-const BASE_SPAWN_INTERVAL = 450;
-const MIN_SPAWN_INTERVAL = 160;
-const EARLY_WAVE_DURATION_MS = 5000;
-const EARLY_WAVE_SPEEDUP = 0.65;
-const BASE_MOB_SPEED = 4.5;
-const MAX_MOB_SPEED = 6.5;
+const BASE_SPAWN_INTERVAL = 550;
+const MIN_SPAWN_INTERVAL = 250;
+const EARLY_WAVE_DURATION_MS = 10000;
+const EARLY_WAVE_SPEEDUP = 0.4;
+const BASE_MOB_SPEED = 3.6;
+const MAX_MOB_SPEED = 5.6;
 const MOB_RADIUS = 0.6;
 const BONUS_FRAME_EVERY = 30;
 const BONUS_FRAME_EXTRA_CHANCE = 0.04;
 const BONUS_FORCE_SCORE = 400;
 const BONUS_FORCE_COOLDOWN_MS = 25000;
-const HEART_UNLOCK_SCORE = 150;
+const HEART_UNLOCK_SCORE = 100;
 const HEART_SPAWN_INTERVAL_MS = 25000;
 const HEART_HP = 1;
 const BASE_PLAYER_SHOTS_PER_SEC = 1000 / 320;
@@ -189,7 +189,7 @@ const particleGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
 const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
 
 function getSpawnInterval() {
-  const rampFactor = Math.min(elapsedTime / 45000, 1);
+  const rampFactor = Math.min(elapsedTime / 55000, 1);
   const baseInterval =
     BASE_SPAWN_INTERVAL - rampFactor * (BASE_SPAWN_INTERVAL - MIN_SPAWN_INTERVAL);
   const earlyFactor =
@@ -204,7 +204,7 @@ function getSpawnInterval() {
 }
 
 function getMobSpeed() {
-  const rampFactor = Math.min(elapsedTime / 45000, 1);
+  const rampFactor = Math.min(elapsedTime / 55000, 1);
   return BASE_MOB_SPEED + rampFactor * (MAX_MOB_SPEED - BASE_MOB_SPEED);
 }
 
@@ -234,9 +234,9 @@ function pickBonusLaneRange() {
 
 function pickBonusKind() {
   const r = Math.random();
-  if (r < 0.45) return 'rapid';
-  if (r < 0.75) return 'pierce';
-  return 'shooter';
+  if (r < 0.40) return 'shooter';
+  if (r < 0.70) return 'pierce';
+  return 'rapid';
 }
 
 function getBonusWallHits() {
@@ -376,10 +376,10 @@ function getMobType() {
   const r = Math.random();
   const secondsElapsed = elapsedTime / 1000;
 
-  if (secondsElapsed > 45 && r < 0.06) return 'boss';
-  if (secondsElapsed > 30 && r < 0.12) return 'heavy';
-  if (secondsElapsed > 15 && r < 0.22) return 'tank';
-  if (secondsElapsed > 5 && r < 0.35) return 'fast';
+  if (secondsElapsed > 48 && r < 0.06) return 'boss';
+  if (secondsElapsed > 38 && r < 0.12) return 'heavy';
+  if (secondsElapsed > 22 && r < 0.22) return 'tank';
+  if (secondsElapsed > 12 && r < 0.35) return 'fast';
   return 'basic';
 }
 
@@ -417,9 +417,9 @@ function spawnTrailingPowerup(scene, parentMob) {
 }
 
 export function spawnLevelBoss(scene, level) {
-  const levelMult = Math.pow(1.25, level - 1);
-  const hp = Math.round(60 * levelMult);
-  const speed = 2.8 + (level - 1) * 0.15;
+  const levelMult = Math.pow(1.18, level - 1);
+  const hp = Math.round(25 * levelMult);
+  const speed = (2.8 + (level - 1) * 0.15) * 1.0;
   const scale = 1.5 + (level - 1) * 0.08;
   const radius = 1.8 * scale;
 
@@ -451,12 +451,40 @@ export function spawnLevelBoss(scene, level) {
 }
 
 function spawnExplosionEffect(scene, position) {
-  const geo = new THREE.SphereGeometry(0.3, 12, 8);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(position);
-  scene.add(mesh);
-  deathParticles.push({ mesh, velocity: new THREE.Vector3(0, 0, 0), life: 0.4, isExplosion: true });
+  const coreGeo = new THREE.SphereGeometry(1.0, 20, 14);
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.95 });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+
+  const outerGeo = new THREE.SphereGeometry(1.6, 20, 14);
+  const outerMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+  const outer = new THREE.Mesh(outerGeo, outerMat);
+
+  const rinGeo = new THREE.RingGeometry(0.5, 2.2, 24);
+  const rinMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(rinGeo, rinMat);
+  ring.rotation.x = Math.PI / 2;
+
+  const group = new THREE.Group();
+  group.add(core);
+  group.add(outer);
+  group.add(ring);
+  group.position.copy(position);
+  scene.add(group);
+
+  const light = new THREE.PointLight(0xff6600, 8, 12);
+  light.position.copy(position);
+  scene.add(light);
+
+  deathParticles.push({
+    mesh: group,
+    velocity: new THREE.Vector3(0, 0, 0),
+    life: 0.7,
+    isExplosion: true,
+    explosionLight: light,
+    explosionCore: core,
+    explosionOuter: outer,
+    explosionRing: ring,
+  });
 }
 
 function spawnMob(scene, balanceFactor, score = 0, level = 1, levelMultiplier = 1) {
@@ -550,7 +578,7 @@ function spawnMob(scene, balanceFactor, score = 0, level = 1, levelMultiplier = 
     const sz = 2.2 * sizeScale;
     const geo = new THREE.BoxGeometry(sz, sz, sz);
     mesh = new THREE.Mesh(geo, bossMobMaterial);
-    speed = getMobSpeed() * 0.35 * balanceFactor * levelMultiplier;
+    speed = getMobSpeed() * 0.36 * balanceFactor * levelMultiplier;
     radius = 1.3 * sizeScale;
   } else if (type === 'heavy') {
     hp = 10 + Math.floor(level * 1.5);
@@ -638,7 +666,7 @@ export function updateMobs(
   elapsedTime += delta;
   spawnTimer += delta;
 
-  const levelMultiplier = Math.pow(1.25, level - 1);
+  const levelMultiplier = Math.pow(1.18, level - 1);
   const balanceFactor = getBalanceFactor(playerShotsPerSecond);
 
   if (canSpawn) {
@@ -657,7 +685,7 @@ export function updateMobs(
     mob.mesh.position.z += mob.speed * dt;
     if (mob.type === 'level_boss') {
       const strafeRange = 6.0;
-      const strafeSpeed = 0.003 + (mob.speed * 0.0005);
+      const strafeSpeed = 0.000614 + (mob.speed * 0.000102);
       mob.mesh.position.x = Math.sin(elapsedTime * strafeSpeed + mob.radius) * strafeRange;
       mob.mesh.rotation.y = Math.sin(elapsedTime * 0.002) * 0.3;
       mob.mesh.position.y = mob.radius + 0.05 + Math.sin(elapsedTime * 0.003) * 0.25;
@@ -684,7 +712,7 @@ export function updateMobs(
 export function checkMobUnitCollisions(scene, units, onMobKilled) {
   const toRemoveUnits = [];
   const toRemoveMobs = [];
-  const BLAST_RADIUS = 2.5;
+  const BLAST_RADIUS = 4.5;
 
   for (const mob of activeMobs) {
     if (mob.scored) continue;
@@ -792,9 +820,23 @@ function updateParticles(scene, dt) {
     p.life -= dt;
 
     if (p.isExplosion) {
-      const progress = 1 - p.life / 0.4;
-      p.mesh.scale.setScalar(1 + progress * 6);
-      p.mesh.material.opacity = Math.max((1 - progress) * 0.8, 0);
+      const progress = 1 - p.life / 0.7;
+      const scale = 1 + progress * 5;
+      p.mesh.scale.setScalar(scale);
+      if (p.explosionCore) {
+        p.explosionCore.material.opacity = Math.max((1 - progress * 1.5) * 0.95, 0);
+        p.explosionCore.scale.setScalar(1 + progress * 0.5);
+      }
+      if (p.explosionOuter) {
+        p.explosionOuter.material.opacity = Math.max((1 - progress) * 0.6, 0);
+      }
+      if (p.explosionRing) {
+        p.explosionRing.material.opacity = Math.max((1 - progress * 0.8) * 0.5, 0);
+        p.explosionRing.scale.setScalar(1 + progress * 3);
+      }
+      if (p.explosionLight) {
+        p.explosionLight.intensity = Math.max((1 - progress) * 8, 0);
+      }
     } else {
       p.velocity.y -= 9.81 * dt;
       p.mesh.position.addScaledVector(p.velocity, dt);
@@ -804,8 +846,11 @@ function updateParticles(scene, dt) {
     if (p.life <= 0) {
       scene.remove(p.mesh);
       if (p.isExplosion) {
-        p.mesh.geometry.dispose();
-        p.mesh.material.dispose();
+        p.mesh.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        if (p.explosionLight) scene.remove(p.explosionLight);
       }
       deathParticles.splice(i, 1);
     }

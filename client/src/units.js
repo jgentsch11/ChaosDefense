@@ -3,7 +3,7 @@ import { createDynamicBody, getWorld } from './physics.js';
 
 const MAX_UNITS = 300;
 const PROJECTILE_MAX_AGE_MS = 22000;
-const PROJECTILE_MIN_Z = -100;
+const PROJECTILE_MIN_Z = -88;
 const PROJECTILE_MAX_Z = 12;
 const NORMIE_RADIUS = 0.3;
 
