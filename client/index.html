@@ -284,6 +284,101 @@
       100% { transform: scale(1); }
     }
 
+    /* Shop Overlay */
+    #shop-overlay {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.82);
+      z-index: 95;
+    }
+    #shop-box {
+      background: linear-gradient(135deg, #0d1b2a, #1b2838);
+      border: 2px solid #4dd6ff;
+      border-radius: 16px;
+      padding: 32px 40px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(77,214,255,0.3);
+      min-width: 380px;
+      max-width: 480px;
+      animation: shopPopIn 0.25s ease-out;
+    }
+    @keyframes shopPopIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    #shop-box h1 {
+      color: #4dd6ff;
+      font-size: 1.8rem;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+    }
+    #shop-score-display {
+      color: #ffe184;
+      font-size: 1.05rem;
+      margin-bottom: 20px;
+    }
+    #shop-items {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .shop-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(30, 62, 100, 0.35);
+      border: 1px solid rgba(77, 214, 255, 0.2);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .shop-item:hover:not(.shop-item-disabled) {
+      background: rgba(40, 80, 130, 0.55);
+      border-color: rgba(77, 214, 255, 0.5);
+      transform: scale(1.02);
+    }
+    .shop-item:active:not(.shop-item-disabled) { transform: scale(0.98); }
+    .shop-item-disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .shop-item-name {
+      color: #d8ecff;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .shop-item-cost {
+      color: #ffe184;
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    #shop-close-btn {
+      display: inline-block;
+      padding: 10px 32px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border: 2px solid #4dd6ff;
+      border-radius: 8px;
+      background: transparent;
+      color: #4dd6ff;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #shop-close-btn:hover { background: rgba(77, 214, 255, 0.15); transform: scale(1.03); }
+    #shop-close-btn:active { transform: scale(0.97); }
+    .shop-hint {
+      color: rgba(255,255,255,0.35);
+      font-size: 0.75rem;
+      margin-top: 12px;
+    }
+
     /* Game Over */
     #gameover-overlay {
       position: fixed; inset: 0;
@@ -356,7 +451,7 @@
       <li class="powerup-empty">No active power-ups</li>
     </ul>
   </div>
-  <div id="controls-hint">&larr; &rarr; Move &nbsp;&nbsp; &uarr; / W Piercing Shot</div>
+  <div id="controls-hint">&larr; &rarr; Move &nbsp;&nbsp; &uarr; / W Piercing Shot &nbsp;&nbsp; &darr; / S Shop</div>
 
   <!-- Boss Warning -->
   <div id="boss-warning">BOSS INCOMING</div>
@@ -366,6 +461,17 @@
     <div id="level-complete-box">
       <h1 id="level-complete-title">LEVEL 1 COMPLETE!</h1>
       <p id="level-complete-subtitle">Choose your power-up!</p>
+    </div>
+  </div>
+
+  <!-- Shop Overlay -->
+  <div id="shop-overlay">
+    <div id="shop-box">
+      <h1>Shop</h1>
+      <p id="shop-score-display">Score: 0</p>
+      <div id="shop-items"></div>
+      <button id="shop-close-btn">Resume</button>
+      <p class="shop-hint">Press &darr; or S to close</p>
     </div>
   </div>
 

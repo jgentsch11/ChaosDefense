@@ -11,6 +11,8 @@ import {
   showBossWarning,
   hideBossWarning,
   showLevelComplete,
+  showShop,
+  hideShop,
 } from './ui.js';
 import { sendScore } from './network.js';
 import {
@@ -58,6 +60,19 @@ const BOSS_WARNING_TIME_MS = 55000;
 let levelState = 'playing';
 let levelElapsed = 0;
 let powerupPickups = [];
+let gamePaused = false;
+let pausedAtTime = 0;
+
+const SHOP_COST = 100;
+const SHOP_ITEMS = [
+  { id: 'rapid', label: 'Rapid Fire (12s)', cost: SHOP_COST },
+  { id: 'double', label: 'Double Shot (13s)', cost: SHOP_COST },
+  { id: 'triple', label: 'Triple Shot (10.5s)', cost: SHOP_COST },
+  { id: 'pierce', label: 'Piercing x3', cost: SHOP_COST },
+  { id: 'wide', label: 'Wide Cannon (12s)', cost: SHOP_COST },
+  { id: 'explosive', label: 'Explosive Shots (12s)', cost: SHOP_COST },
+  { id: 'life', label: 'Extra Life (+1)', cost: SHOP_COST },
+];
 
 async function startGame(username) {
   try {
@@ -87,7 +102,9 @@ async function startGame(username) {
     createCannon(scene);
     createEnemyBase(scene);
     setupControls();
+    setupShopControls();
 
+    gamePaused = false;
     gameRunning = true;
     lastTime = performance.now();
     requestAnimationFrame(gameLoop);
@@ -554,12 +571,83 @@ function startNextLevel() {
   updateLevelTimer(LEVEL_DURATION_MS / 1000);
 }
 
+// ── Shop / Pause ───────────────────────────────────────────
+
+function openShop() {
+  if (gamePaused || !gameRunning) return;
+  if (levelState === 'level_complete' || levelState === 'powerup_select') return;
+
+  gamePaused = true;
+  pausedAtTime = performance.now();
+  showShop(score, SHOP_ITEMS, handleShopBuy);
+}
+
+function closeShop() {
+  if (!gamePaused) return;
+  gamePaused = false;
+  hideShop();
+
+  const pauseDuration = performance.now() - pausedAtTime;
+  lastTime += pauseDuration;
+}
+
+function handleShopBuy(itemId) {
+  if (score < SHOP_COST) return;
+
+  score -= SHOP_COST;
+  updateScoreHUD(score);
+  sendScore(score);
+
+  switch (itemId) {
+    case 'rapid': activateRapidFire(12000); break;
+    case 'double': activateDoubleShotBonus(13000); break;
+    case 'triple': activateTripleShotBonus(10500); break;
+    case 'pierce': addPiercingAmmo(3); break;
+    case 'wide': activateWideCannon(12000); break;
+    case 'explosive': activateExplosiveShots(12000); break;
+    case 'life':
+      lives = Math.min(lives + 1, MAX_LIVES);
+      updateLivesHUD(lives);
+      break;
+  }
+
+  closeShop();
+}
+
+let shopControlsInitialized = false;
+function setupShopControls() {
+  if (shopControlsInitialized) return;
+  shopControlsInitialized = true;
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+      if (gamePaused) {
+        closeShop();
+      } else {
+        openShop();
+      }
+    }
+    if (e.key === 'Escape' && gamePaused) {
+      closeShop();
+    }
+  });
+
+  document.getElementById('shop-close-btn').addEventListener('click', () => {
+    closeShop();
+  });
+}
+
 // ── Game Loop ──────────────────────────────────────────────
 
 let lastTime = 0;
 function gameLoop(timestamp) {
   if (!gameRunning) return;
   requestAnimationFrame(gameLoop);
+
+  if (gamePaused) {
+    renderer.render(scene, camera);
+    return;
+  }
 
   let lastStep = 'init';
   try {

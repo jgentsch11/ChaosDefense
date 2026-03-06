@@ -141,6 +141,45 @@ export function updatePowerupsHUD(powerups) {
   }
 }
 
+export function showShop(score, items, onBuy) {
+  const overlay = document.getElementById('shop-overlay');
+  const scoreDisplay = document.getElementById('shop-score-display');
+  const container = document.getElementById('shop-items');
+
+  scoreDisplay.textContent = `Score: ${score.toLocaleString()}`;
+  container.innerHTML = '';
+
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    if (score < item.cost) row.classList.add('shop-item-disabled');
+
+    const name = document.createElement('span');
+    name.className = 'shop-item-name';
+    name.textContent = item.label;
+
+    const cost = document.createElement('span');
+    cost.className = 'shop-item-cost';
+    cost.textContent = `${item.cost} pts`;
+
+    row.appendChild(name);
+    row.appendChild(cost);
+
+    if (score >= item.cost) {
+      row.addEventListener('click', () => onBuy(item.id));
+    }
+
+    container.appendChild(row);
+  }
+
+  overlay.style.display = 'flex';
+}
+
+export function hideShop() {
+  const overlay = document.getElementById('shop-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 export function showGameOver(finalScore, onRetry) {
   const overlay = document.getElementById('gameover-overlay');
   overlay.style.display = 'flex';
