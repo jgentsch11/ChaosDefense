@@ -19,19 +19,19 @@ const RIGHT_LANE_X_MIN = 0.8;
 const RIGHT_LANE_X_MAX = 7.2;
 const BONUS_SAFE_RIGHT_X_MIN = 2.9;
 
-const BASE_SPAWN_INTERVAL = 800;
-const MIN_SPAWN_INTERVAL = 280;
-const EARLY_WAVE_DURATION_MS = 8000;
-const EARLY_WAVE_SPEEDUP = 0.75;
+const BASE_SPAWN_INTERVAL = 450;
+const MIN_SPAWN_INTERVAL = 160;
+const EARLY_WAVE_DURATION_MS = 5000;
+const EARLY_WAVE_SPEEDUP = 0.65;
 const BASE_MOB_SPEED = 4.5;
 const MAX_MOB_SPEED = 6.5;
 const MOB_RADIUS = 0.6;
-const BONUS_FRAME_EVERY = 14;
-const BONUS_FRAME_EXTRA_CHANCE = 0.1;
-const BONUS_FORCE_SCORE = 260;
-const BONUS_FORCE_COOLDOWN_MS = 12000;
-const HEART_UNLOCK_SCORE = 80;
-const HEART_SPAWN_INTERVAL_MS = 12000;
+const BONUS_FRAME_EVERY = 30;
+const BONUS_FRAME_EXTRA_CHANCE = 0.04;
+const BONUS_FORCE_SCORE = 400;
+const BONUS_FORCE_COOLDOWN_MS = 25000;
+const HEART_UNLOCK_SCORE = 150;
+const HEART_SPAWN_INTERVAL_MS = 25000;
 const HEART_HP = 1;
 const BASE_PLAYER_SHOTS_PER_SEC = 1000 / 320;
 const BONUS_WALL_BASE_HITS = 2;
@@ -383,7 +383,7 @@ function getMobType() {
   return 'basic';
 }
 
-const TRAILING_POWERUP_CHANCE = 0.4;
+const TRAILING_POWERUP_CHANCE = 0.15;
 
 function spawnTrailingPowerup(scene, parentMob) {
   const bonusKind = pickBonusKind();
@@ -418,8 +418,8 @@ function spawnTrailingPowerup(scene, parentMob) {
 
 export function spawnLevelBoss(scene, level) {
   const levelMult = Math.pow(1.25, level - 1);
-  const hp = Math.round(30 * levelMult);
-  const speed = 2.0 + (level - 1) * 0.1;
+  const hp = Math.round(60 * levelMult);
+  const speed = 2.8 + (level - 1) * 0.15;
   const scale = 1.5 + (level - 1) * 0.08;
   const radius = 1.8 * scale;
 
@@ -656,8 +656,8 @@ export function updateMobs(
   for (const mob of activeMobs) {
     mob.mesh.position.z += mob.speed * dt;
     if (mob.type === 'level_boss') {
-      const strafeRange = 5.0;
-      const strafeSpeed = 0.0018 + (mob.speed * 0.0003);
+      const strafeRange = 6.0;
+      const strafeSpeed = 0.003 + (mob.speed * 0.0005);
       mob.mesh.position.x = Math.sin(elapsedTime * strafeSpeed + mob.radius) * strafeRange;
       mob.mesh.rotation.y = Math.sin(elapsedTime * 0.002) * 0.3;
       mob.mesh.position.y = mob.radius + 0.05 + Math.sin(elapsedTime * 0.003) * 0.25;
@@ -699,9 +699,17 @@ export function checkMobUnitCollisions(scene, units, onMobKilled) {
       const dz = mPos.z - uPos.z;
       const distSq = dx * dx + dy * dy + dz * dz;
 
-      const hitDist = mob.radius + 0.3;
+      const hitDist = mob.radius + (unit.isPiercingShot ? 0.7 : 0.3);
       if (distSq < hitDist * hitDist) {
-        mob.hp--;
+        if (unit.isPiercingShot) {
+          if (mob.isLevelBoss) {
+            mob.hp -= 10;
+          } else {
+            mob.hp = 0;
+          }
+        } else {
+          mob.hp--;
+        }
         updateHitIndicators(mob);
         if (!unit.pierceAll) {
           unit.scored = true;

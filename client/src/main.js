@@ -18,7 +18,8 @@ import {
   setupControls,
   updateCannon,
   activateRapidFire,
-  activatePiercingBonus,
+  addPiercingAmmo,
+  getPiercingAmmo,
   activateDoubleShotBonus,
   activateTripleShotBonus,
   activateWideCannon,
@@ -367,7 +368,7 @@ function applyBonusEffect(bonusKind) {
     return;
   }
   if (bonusKind === 'pierce') {
-    activatePiercingBonus();
+    addPiercingAmmo(1);
     return;
   }
   if (bonusKind === 'shooter') {
@@ -390,7 +391,7 @@ const POWERUP_POOL = [
   { id: 'rapid', label: 'RAPID FIRE', color: 0x4dd6ff, activate: () => activateRapidFire(12000) },
   { id: 'double', label: 'DOUBLE SHOT', color: 0xffcc44, activate: () => activateDoubleShotBonus(13000) },
   { id: 'triple', label: 'TRIPLE SHOT', color: 0xff44aa, activate: () => activateTripleShotBonus(10500) },
-  { id: 'pierce', label: 'PIERCING', color: 0xcc77ff, activate: () => activatePiercingBonus(9000) },
+  { id: 'pierce', label: 'PIERCING x3', color: 0x00ffcc, activate: () => addPiercingAmmo(3) },
   { id: 'wide', label: 'WIDE CANNON', color: 0x44ff88, activate: () => activateWideCannon(12000) },
   { id: 'explosive', label: 'EXPLOSIVE', color: 0xff6600, activate: () => activateExplosiveShots(12000) },
 ];

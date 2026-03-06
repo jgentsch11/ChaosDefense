@@ -7,7 +7,6 @@ const LANE_HALF_WIDTH = 7.2;
 const MOVE_SPEED = 8;
 const RAPID_FIRE_MULTIPLIER = 0.25;
 const RAPID_FIRE_DURATION_MS = 9000;
-const PIERCING_DURATION_MS = 9000;
 const DOUBLE_SHOT_DURATION_MS = 11000;
 const TRIPLE_SHOT_DURATION_MS = 10000;
 const WIDE_CANNON_DURATION_MS = 12000;
@@ -26,7 +25,8 @@ let moveLeft = false;
 let moveRight = false;
 let flashTimer = 0;
 let rapidFireUntil = 0;
-let piercingUntil = 0;
+let piercingAmmo = 0;
+let firePiercingRequested = false;
 let doubleShotUntil = 0;
 let tripleShotUntil = 0;
 let wideCannonUntil = 0;
@@ -64,7 +64,8 @@ export function createCannon(scene) {
   lastFireTime = 0;
   flashTimer = 0;
   rapidFireUntil = 0;
-  piercingUntil = 0;
+  piercingAmmo = 0;
+  firePiercingRequested = false;
   doubleShotUntil = 0;
   tripleShotUntil = 0;
   wideCannonUntil = 0;
@@ -77,6 +78,11 @@ export function setupControls() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft = true;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight = true;
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      if (piercingAmmo > 0 && !firePiercingRequested) {
+        firePiercingRequested = true;
+      }
+    }
   });
 
   document.addEventListener('keyup', (e) => {
@@ -99,6 +105,12 @@ export function updateCannon(scene, time, canFire = true) {
   cannonMesh.scale.x = THREE.MathUtils.lerp(cannonMesh.scale.x, targetScaleX, 0.1);
 
   if (canFire) {
+    if (firePiercingRequested && piercingAmmo > 0) {
+      firePiercingRequested = false;
+      piercingAmmo--;
+      firePiercingVolley(scene, time);
+    }
+
     const fireInterval = getCurrentFireInterval(time);
     if (!Number.isFinite(lastFireTime) || time < lastFireTime) {
       lastFireTime = time - fireInterval;
@@ -107,11 +119,16 @@ export function updateCannon(scene, time, canFire = true) {
       lastFireTime = time;
       fireVolley(scene, time);
     }
+  } else {
+    firePiercingRequested = false;
   }
 
   if (muzzleFlash && flashTimer > 0) {
     flashTimer -= dt;
     muzzleFlash.material.opacity = Math.max(flashTimer / 0.08, 0);
+    if (flashTimer <= 0) {
+      muzzleFlash.material.color.setHex(0x88ccff);
+    }
   }
 }
 
@@ -140,11 +157,42 @@ function fireUnit(scene, xOffset = 0, time = performance.now()) {
   const spread = xOffset * 0.2 + (Math.random() - 0.5) * 0.2;
   const velocity = new THREE.Vector3(spread, 0.5, -LAUNCH_SPEED);
 
-  const isPiercingActive = time < piercingUntil;
   const isExplosive = time < explosiveUntil;
   spawnBlueNormie(scene, pos, velocity, {
-    pierceAll: isPiercingActive,
+    pierceAll: false,
     explosive: isExplosive,
+  });
+}
+
+function firePiercingVolley(scene, time) {
+  const shooterCount = getCurrentShooterCount(time);
+  const isWide = time < wideCannonUntil;
+  const spacing = isWide ? WIDE_CANNON_SPACING : SHOOTER_SPACING;
+  for (let i = 0; i < shooterCount; i++) {
+    const laneOffset = i - (shooterCount - 1) / 2;
+    firePiercingUnit(scene, laneOffset * spacing);
+  }
+
+  flashTimer = 0.15;
+  if (muzzleFlash) {
+    muzzleFlash.material.color.setHex(0x00ffff);
+    muzzleFlash.material.opacity = 1.0;
+  }
+}
+
+function firePiercingUnit(scene, xOffset = 0) {
+  const pos = new THREE.Vector3(
+    cannonMesh.position.x + xOffset + (Math.random() - 0.5) * 0.06,
+    cannonMesh.position.y + 0.7,
+    cannonMesh.position.z - 0.5
+  );
+  const spread = xOffset * 0.15 + (Math.random() - 0.5) * 0.1;
+  const velocity = new THREE.Vector3(spread, 0.4, -LAUNCH_SPEED * 1.4);
+
+  spawnBlueNormie(scene, pos, velocity, {
+    pierceAll: true,
+    explosive: false,
+    isPiercingShot: true,
   });
 }
 
@@ -160,8 +208,12 @@ export function activateRapidFire(durationMs = RAPID_FIRE_DURATION_MS) {
   rapidFireUntil = performance.now() + durationMs;
 }
 
-export function activatePiercingBonus(durationMs = PIERCING_DURATION_MS) {
-  piercingUntil = performance.now() + durationMs;
+export function addPiercingAmmo(count = 1) {
+  piercingAmmo += count;
+}
+
+export function getPiercingAmmo() {
+  return piercingAmmo;
 }
 
 export function activateDoubleShotBonus(durationMs = DOUBLE_SHOT_DURATION_MS) {
@@ -217,8 +269,7 @@ export function getActivePowerups(time = performance.now()) {
   const rapidMs = Math.max(rapidFireUntil - time, 0);
   if (rapidMs > 0) active.push({ id: 'rapid', label: 'Rapid Fire', msRemaining: rapidMs });
 
-  const pierceMs = Math.max(piercingUntil - time, 0);
-  if (pierceMs > 0) active.push({ id: 'pierce', label: 'Piercing Shots', msRemaining: pierceMs });
+  if (piercingAmmo > 0) active.push({ id: 'pierce', label: `Piercing x${piercingAmmo}`, msRemaining: -1 });
 
   const doubleShotMs = Math.max(doubleShotUntil - time, 0);
   const tripleShotMs = Math.max(tripleShotUntil - time, 0);

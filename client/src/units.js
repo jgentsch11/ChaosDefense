@@ -21,6 +21,14 @@ const explosiveMaterial = new THREE.MeshStandardMaterial({
   emissive: 0xff4400,
   emissiveIntensity: 0.6,
 });
+const piercingMaterial = new THREE.MeshStandardMaterial({
+  color: 0xeeffff,
+  emissive: 0x00ffff,
+  emissiveIntensity: 1.8,
+  metalness: 0.7,
+  roughness: 0.1,
+});
+const PIERCING_RADIUS = 0.7;
 const goldMaterial = new THREE.MeshStandardMaterial({
   color: 0xffd700,
   metalness: 0.6,
@@ -35,13 +43,16 @@ export function spawnBlueNormie(scene, position, velocity, options = {}) {
   recycleIfAtCap(scene);
 
   const isExplosive = options.explosive ?? false;
-  const mat = isExplosive ? explosiveMaterial : blueMaterial;
-  const mesh = new THREE.Mesh(unitGeometry, mat);
+  const isPiercing = options.isPiercingShot ?? false;
+  const radius = isPiercing ? PIERCING_RADIUS : NORMIE_RADIUS;
+  const mat = isPiercing ? piercingMaterial : isExplosive ? explosiveMaterial : blueMaterial;
+  const geo = isPiercing ? new THREE.SphereGeometry(PIERCING_RADIUS, 16, 12) : unitGeometry;
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(position);
   mesh.castShadow = true;
   scene.add(mesh);
 
-  const { body, collider } = createDynamicBody(getWorld(), position, NORMIE_RADIUS, 1, 0.4);
+  const { body, collider } = createDynamicBody(getWorld(), position, radius, isPiercing ? 2 : 1, 0.4);
   configureProjectileBody(body, collider);
   body.setLinvel({ x: velocity.x, y: velocity.y, z: velocity.z }, true);
 
@@ -56,6 +67,7 @@ export function spawnBlueNormie(scene, position, velocity, options = {}) {
     canTriggerGates: options.canTriggerGates ?? true,
     pierceAll: options.pierceAll ?? false,
     explosive: isExplosive,
+    isPiercingShot: isPiercing,
   };
   activeUnits.push(unit);
   return unit;

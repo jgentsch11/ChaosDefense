@@ -123,12 +123,20 @@ export function updatePowerupsHUD(powerups) {
     label.className = 'powerup-label';
     label.textContent = powerup.label;
 
-    const timer = document.createElement('span');
-    timer.className = 'powerup-timer';
-    timer.textContent = `${(powerup.msRemaining / 1000).toFixed(1)}s`;
-
     li.appendChild(label);
-    li.appendChild(timer);
+
+    if (powerup.msRemaining >= 0) {
+      const timer = document.createElement('span');
+      timer.className = 'powerup-timer';
+      timer.textContent = `${(powerup.msRemaining / 1000).toFixed(1)}s`;
+      li.appendChild(timer);
+    } else {
+      const badge = document.createElement('span');
+      badge.className = 'powerup-timer';
+      badge.textContent = '▲ / W';
+      li.appendChild(badge);
+    }
+
     list.appendChild(li);
   }
 }
