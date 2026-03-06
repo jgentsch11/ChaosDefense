@@ -17,12 +17,13 @@ const LEFT_LANE_X_MIN = -7.2;
 const LEFT_LANE_X_MAX = -0.8;
 const RIGHT_LANE_X_MIN = 0.8;
 const RIGHT_LANE_X_MAX = 7.2;
+const BONUS_SAFE_RIGHT_X_MIN = 2.9;
 
 const BASE_SPAWN_INTERVAL = 1380;
 const MIN_SPAWN_INTERVAL = 560;
 const EARLY_WAVE_DURATION_MS = 25000;
 const EARLY_WAVE_SPEEDUP = 0.82;
-const BASE_MOB_SPEED = 2.8;
+const BASE_MOB_SPEED = 3.7;
 const MAX_MOB_SPEED = 4.7;
 const MOB_RADIUS = 0.6;
 const BONUS_FRAME_EVERY = 14;
@@ -165,6 +166,10 @@ function pickLaneRange() {
 
 function pickRightLaneRange() {
   return { min: RIGHT_LANE_X_MIN, max: RIGHT_LANE_X_MAX };
+}
+
+function pickBonusLaneRange() {
+  return { min: BONUS_SAFE_RIGHT_X_MIN, max: RIGHT_LANE_X_MAX };
 }
 
 function pickBonusKind() {
@@ -318,6 +323,39 @@ function getMobType() {
   return 'basic';
 }
 
+const TRAILING_POWERUP_CHANCE = 0.4;
+
+function spawnTrailingPowerup(scene, parentMob) {
+  const bonusKind = pickBonusKind();
+  const core = new THREE.Mesh(bonusCoreGeometry, bonusCoreMaterials[bonusKind]);
+  core.scale.setScalar(0.85);
+
+  const badge = createPowerupBadge(bonusKind);
+  badge.position.set(0, 1.4, 0);
+
+  const group = new THREE.Group();
+  group.add(core);
+  group.add(badge);
+
+  const radius = 0.6;
+  const zOffset = parentMob.radius + radius + 0.5;
+  const x = parentMob.mesh.position.x;
+  group.position.set(x, radius + 0.05, SPAWN_Z - zOffset);
+  group.castShadow = true;
+  scene.add(group);
+
+  activeMobs.push({
+    mesh: group,
+    type: 'trailing_powerup',
+    hp: 1,
+    speed: parentMob.speed,
+    radius,
+    bonusKind,
+    scored: false,
+    hitIndicatorUpdaters: null,
+  });
+}
+
 function spawnMob(scene, balanceFactor, score = 0) {
   const timeSinceBonus = elapsedTime - lastBonusSpawnAt;
   const timeSinceHeart = elapsedTime - lastHeartSpawnAt;
@@ -367,7 +405,7 @@ function spawnMob(scene, balanceFactor, score = 0) {
 
     hp = getBonusWallHits();
     speed = getMobSpeed() * (1.0 + (balanceFactor - 1) * 0.2);
-    radius = 2.0;
+    radius = 1.35;
     bonusFramesSpawned++;
     lastBonusSpawnAt = elapsedTime;
 
@@ -434,7 +472,12 @@ function spawnMob(scene, balanceFactor, score = 0) {
     radius = MOB_RADIUS;
   }
 
-  const lane = type === 'bonus' || type === 'heart' ? pickRightLaneRange() : pickLaneRange();
+  const lane =
+    type === 'bonus'
+      ? pickBonusLaneRange()
+      : type === 'heart' || type === 'tank' || type === 'heavy' || type === 'boss'
+        ? pickRightLaneRange()
+        : pickLaneRange();
   const x = lane.min + Math.random() * (lane.max - lane.min);
   mesh.position.set(x, radius + 0.05, SPAWN_Z);
   mesh.castShadow = true;
@@ -449,7 +492,7 @@ function spawnMob(scene, balanceFactor, score = 0) {
 
   scene.add(mesh);
 
-  activeMobs.push({
+  const mob = {
     mesh,
     type,
     hp,
@@ -458,8 +501,13 @@ function spawnMob(scene, balanceFactor, score = 0) {
     bonusKind,
     scored: false,
     hitIndicatorUpdaters,
-  });
+  };
+  activeMobs.push(mob);
   mobsSpawnedTotal++;
+
+  if ((type === 'tank' || type === 'heavy' || type === 'boss') && Math.random() < TRAILING_POWERUP_CHANCE) {
+    spawnTrailingPowerup(scene, mob);
+  }
 }
 
 export function getActiveMobs() {
@@ -499,6 +547,8 @@ export function updateMobs(
     } else if (mob.type === 'heart') {
       mob.mesh.rotation.y += dt * 0.7;
       mob.mesh.rotation.z = Math.sin(elapsedTime * 0.0025 + mob.mesh.position.x) * 0.15;
+    } else if (mob.type === 'trailing_powerup') {
+      mob.mesh.rotation.z += dt * 0.8;
     }
     mob.mesh.position.y = mob.radius + 0.05 + Math.sin(elapsedTime * 0.003 + mob.mesh.position.x * 2) * 0.08;
   }

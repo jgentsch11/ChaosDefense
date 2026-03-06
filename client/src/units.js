@@ -6,7 +6,6 @@ const PROJECTILE_MAX_AGE_MS = 22000;
 const PROJECTILE_MIN_Z = -100;
 const PROJECTILE_MAX_Z = 12;
 const NORMIE_RADIUS = 0.3;
-const PROJECTILE_SEPARATION_DIST = NORMIE_RADIUS * 2.05;
 
 const activeUnits = [];
 let nextUnitId = 0;
@@ -81,8 +80,6 @@ export function spawnGoldTank(scene, position, velocity) {
 }
 
 export function syncUnits() {
-  separateOverlappingUnits();
-
   for (const unit of activeUnits) {
     if (!unit.body) continue;
     const pos = unit.body.translation();
@@ -127,50 +124,6 @@ export function cleanupFallenUnits(scene, yThreshold = -5) {
   }
 }
 
-function separateOverlappingUnits() {
-  const minDist = PROJECTILE_SEPARATION_DIST;
-  const minDistSq = minDist * minDist;
-
-  for (let i = 0; i < activeUnits.length; i++) {
-    const a = activeUnits[i];
-    if (!a.body || a.scored) continue;
-    const aPos = a.body.translation();
-
-    for (let j = i + 1; j < activeUnits.length; j++) {
-      const b = activeUnits[j];
-      if (!b.body || b.scored) continue;
-      const bPos = b.body.translation();
-
-      // Cheap broad-phase reject for non-nearby projectiles.
-      if (Math.abs(aPos.z - bPos.z) > minDist * 1.5) continue;
-      if (Math.abs(aPos.x - bPos.x) > minDist * 1.5) continue;
-
-      const dx = bPos.x - aPos.x;
-      const dy = bPos.y - aPos.y;
-      const dz = bPos.z - aPos.z;
-      const distSq = dx * dx + dy * dy + dz * dz;
-      if (distSq >= minDistSq) continue;
-
-      const dist = Math.max(Math.sqrt(distSq), 0.0001);
-      const overlap = minDist - dist;
-      if (overlap <= 0) continue;
-
-      const nx = dx / dist;
-      const ny = dy / dist;
-      const nz = dz / dist;
-      const push = overlap * 0.5;
-
-      a.body.setTranslation(
-        { x: aPos.x - nx * push, y: aPos.y - ny * push, z: aPos.z - nz * push },
-        true
-      );
-      b.body.setTranslation(
-        { x: bPos.x + nx * push, y: bPos.y + ny * push, z: bPos.z + nz * push },
-        true
-      );
-    }
-  }
-}
 
 function recycleIfAtCap(scene) {
   while (activeUnits.length >= MAX_UNITS) {
@@ -179,11 +132,14 @@ function recycleIfAtCap(scene) {
 }
 
 function configureProjectileBody(body, collider) {
-  // Keep projectiles moving down-lane instead of immediately dropping/rolling.
   body.setGravityScale(0.35, true);
   body.setLinearDamping(0.03);
   body.setAngularDamping(0.02);
   collider.setFriction(0.0);
+  // Membership: group 1 (0x0002). Filter: group 0 only (0x0001).
+  // Statics default to all groups, so projectiles still hit floor/walls
+  // but pass through each other.
+  collider.setCollisionGroups((0x0002 << 16) | 0x0001);
 }
 
 export function resetUnits(scene) {

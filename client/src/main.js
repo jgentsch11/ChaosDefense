@@ -260,7 +260,7 @@ function processMobCollisions() {
       updateLivesHUD(lives);
     }
 
-    if (mob.type === 'bonus') {
+    if (mob.type === 'bonus' || mob.type === 'trailing_powerup') {
       applyBonusEffect(mob.bonusKind);
     }
 
@@ -273,11 +273,13 @@ function processMobCollisions() {
             ? 20
             : mob.type === 'tank'
               ? 5
-              : mob.type === 'fast'
-                ? 2
-                : mob.type === 'bonus'
-                  ? 8
-                  : 1;
+              : mob.type === 'trailing_powerup'
+                ? 3
+                : mob.type === 'fast'
+                  ? 2
+                  : mob.type === 'bonus'
+                    ? 8
+                    : 1;
     addScore(points);
   });
 
@@ -295,7 +297,7 @@ function processMobsAtBase() {
     if (mob.type === 'heart') {
       lives = Math.min(lives + 1, MAX_LIVES);
       updateLivesHUD(lives);
-    } else if (mob.type !== 'bonus') {
+    } else if (mob.type !== 'bonus' && mob.type !== 'trailing_powerup') {
       const damage = mob.type === 'boss' ? 3 : mob.type === 'heavy' ? 2 : 1;
       lives -= damage;
       updateLivesHUD(lives);
