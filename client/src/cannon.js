@@ -74,7 +74,11 @@ export function createCannon(scene) {
   return group;
 }
 
+let controlsInitialized = false;
 export function setupControls() {
+  if (controlsInitialized) return;
+  controlsInitialized = true;
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft = true;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight = true;

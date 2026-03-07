@@ -44,6 +44,7 @@ import {
 } from './mobs.js';
 
 let scene, camera, renderer;
+let resizeHandler = null;
 let score = 0;
 let lives = 6;
 let currentLevel = 1;
@@ -63,15 +64,14 @@ let powerupPickups = [];
 let gamePaused = false;
 let pausedAtTime = 0;
 
-const SHOP_COST = 100;
 const SHOP_ITEMS = [
-  { id: 'rapid', label: 'Rapid Fire (12s)', cost: SHOP_COST },
-  { id: 'double', label: 'Double Shot (13s)', cost: SHOP_COST },
-  { id: 'triple', label: 'Triple Shot (10.5s)', cost: SHOP_COST },
-  { id: 'pierce', label: 'Piercing x3', cost: SHOP_COST },
-  { id: 'wide', label: 'Wide Cannon (12s)', cost: SHOP_COST },
-  { id: 'explosive', label: 'Explosive Shots (12s)', cost: SHOP_COST },
-  { id: 'life', label: 'Extra Life (+1)', cost: SHOP_COST },
+  { id: 'rapid', label: 'Rapid Fire (12s)', cost: 200 },
+  { id: 'double', label: 'Double Shot (13s)', cost: 250 },
+  { id: 'triple', label: 'Triple Shot (10.5s)', cost: 400 },
+  { id: 'pierce', label: 'Piercing x3', cost: 350 },
+  { id: 'wide', label: 'Wide Cannon (12s)', cost: 500 },
+  { id: 'explosive', label: 'Explosive Shots (12s)', cost: 450 },
+  { id: 'life', label: 'Extra Life (+1)', cost: 300 },
 ];
 
 async function startGame(username) {
@@ -129,6 +129,14 @@ function showError(msg) {
 }
 
 function initScene() {
+  if (renderer) {
+    renderer.domElement.remove();
+    renderer.dispose();
+  }
+  if (resizeHandler) {
+    window.removeEventListener('resize', resizeHandler);
+  }
+
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x151525);
   scene.fog = new THREE.Fog(0x151525, 50, 120);
@@ -164,11 +172,12 @@ function initScene() {
   rimLight.position.set(-5, 5, -15);
   scene.add(rimLight);
 
-  window.addEventListener('resize', () => {
+  resizeHandler = () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  };
+  window.addEventListener('resize', resizeHandler);
 }
 
 function buildLane() {
@@ -592,9 +601,10 @@ function closeShop() {
 }
 
 function handleShopBuy(itemId) {
-  if (score < SHOP_COST) return;
+  const item = SHOP_ITEMS.find((i) => i.id === itemId);
+  if (!item || score < item.cost) return;
 
-  score -= SHOP_COST;
+  score -= item.cost;
   updateScoreHUD(score);
   sendScore(score);
 

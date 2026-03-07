@@ -3,6 +3,9 @@ import { createDynamicBody, getWorld } from './physics.js';
 
 const MAX_UNITS = 300;
 const PROJECTILE_MAX_AGE_MS = 22000;
+const PIERCING_MAX_AGE_MS = 4000;
+const PIERCING_MIN_SPEED_SQ = 4.0;
+const PIERCING_MAX_HITS = 10;
 const PROJECTILE_MIN_Z = -88;
 const PROJECTILE_MAX_Z = 12;
 const NORMIE_RADIUS = 0.3;
@@ -68,6 +71,7 @@ export function spawnBlueNormie(scene, position, velocity, options = {}) {
     pierceAll: options.pierceAll ?? false,
     explosive: isExplosive,
     isPiercingShot: isPiercing,
+    piercesRemaining: isPiercing ? PIERCING_MAX_HITS : Infinity,
   };
   activeUnits.push(unit);
   return unit;
@@ -137,6 +141,22 @@ export function cleanupFallenUnits(scene, yThreshold = -5) {
     const age = now - (unit.spawnedAt || now);
     if (pos.y < yThreshold || pos.z < PROJECTILE_MIN_Z || pos.z > PROJECTILE_MAX_Z || age > PROJECTILE_MAX_AGE_MS) {
       toRemove.push(unit);
+      continue;
+    }
+    if (unit.isPiercingShot) {
+      if (age > PIERCING_MAX_AGE_MS) {
+        toRemove.push(unit);
+        continue;
+      }
+      const vel = unit.body.linvel();
+      const speedSq = vel.x * vel.x + vel.y * vel.y + vel.z * vel.z;
+      if (speedSq < PIERCING_MIN_SPEED_SQ) {
+        toRemove.push(unit);
+        continue;
+      }
+      if (unit.piercesRemaining <= 0) {
+        toRemove.push(unit);
+      }
     }
   }
   for (const unit of toRemove) {

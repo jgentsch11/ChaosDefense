@@ -742,6 +742,12 @@ export function checkMobUnitCollisions(scene, units, onMobKilled) {
         if (!unit.pierceAll) {
           unit.scored = true;
           toRemoveUnits.push(unit);
+        } else if (unit.piercesRemaining != null) {
+          unit.piercesRemaining--;
+          if (unit.piercesRemaining <= 0) {
+            unit.scored = true;
+            toRemoveUnits.push(unit);
+          }
         }
 
         if (mob.hp <= 0) {

@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import { updateLeaderboard } from './ui.js';
 
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
 
 let socket = null;
 let localUsername = null;
