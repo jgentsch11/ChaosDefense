@@ -425,6 +425,268 @@
     }
     #retry-btn:hover { transform: scale(1.03); box-shadow: 0 0 20px rgba(233,69,96,0.5); }
     #retry-btn:active { transform: scale(0.97); }
+
+    /* AP HUD */
+    #ap-hud {
+      position: fixed;
+      top: 16px; left: 180px;
+      color: #ffd700;
+      font-size: 1.2rem;
+      font-weight: 700;
+      z-index: 50;
+      display: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+
+    /* Ability Shop Overlay */
+    #ability-shop-overlay {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.85);
+      z-index: 96;
+    }
+    #ability-shop-box {
+      background: linear-gradient(135deg, #0d1b2a, #1b2838);
+      border: 2px solid #ffd700;
+      border-radius: 16px;
+      padding: 28px 36px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(255,215,0,0.25);
+      min-width: 440px;
+      max-width: 560px;
+      max-height: 85vh;
+      overflow-y: auto;
+      animation: shopPopIn 0.25s ease-out;
+    }
+    #ability-shop-box h1 {
+      color: #ffd700;
+      font-size: 1.6rem;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 4px;
+    }
+    #ability-shop-ap-display {
+      color: #ffd700;
+      font-size: 1.05rem;
+      margin-bottom: 6px;
+    }
+    #ability-shop-earned {
+      color: #7dff7d;
+      font-size: 0.95rem;
+      margin-bottom: 16px;
+    }
+    #ability-shop-items {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .ability-shop-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(30, 62, 100, 0.35);
+      border: 1px solid rgba(255, 215, 0, 0.15);
+      gap: 10px;
+    }
+    .ability-shop-row.owned {
+      border-color: rgba(125, 255, 125, 0.3);
+    }
+    .ability-shop-info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      flex: 1;
+      min-width: 0;
+    }
+    .ability-shop-name {
+      color: #d8ecff;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+    .ability-shop-detail {
+      color: #8598b3;
+      font-size: 0.72rem;
+      margin-top: 2px;
+    }
+    .ability-shop-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ability-shop-btn {
+      padding: 6px 14px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border: 1px solid #ffd700;
+      border-radius: 6px;
+      background: rgba(255,215,0,0.1);
+      color: #ffd700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ability-shop-btn:hover { background: rgba(255,215,0,0.25); transform: scale(1.03); }
+    .ability-shop-btn:active { transform: scale(0.97); }
+    .ability-shop-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .ability-shop-btn:disabled:hover { background: rgba(255,215,0,0.1); transform: none; }
+    .ability-shop-maxed {
+      color: #7dff7d;
+      font-size: 0.78rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    #ability-shop-continue {
+      display: inline-block;
+      padding: 10px 32px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border: 2px solid #ffd700;
+      border-radius: 8px;
+      background: transparent;
+      color: #ffd700;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #ability-shop-continue:hover { background: rgba(255,215,0,0.15); transform: scale(1.03); }
+    #ability-shop-continue:active { transform: scale(0.97); }
+
+    /* Spacebar Abilities Menu */
+    #abilities-menu-overlay {
+      position: fixed; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.78);
+      z-index: 97;
+    }
+    #abilities-menu-box {
+      background: linear-gradient(135deg, #0d1b2a, #1b2838);
+      border: 2px solid #a855f7;
+      border-radius: 16px;
+      padding: 28px 36px;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(168,85,247,0.3);
+      min-width: 380px;
+      max-width: 480px;
+      animation: shopPopIn 0.2s ease-out;
+    }
+    #abilities-menu-box h1 {
+      color: #a855f7;
+      font-size: 1.5rem;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+    #abilities-menu-items {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .ability-menu-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(30, 62, 100, 0.35);
+      border: 1px solid rgba(168,85,247,0.2);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      gap: 12px;
+    }
+    .ability-menu-row:hover:not(.ability-on-cooldown) {
+      background: rgba(60, 80, 130, 0.55);
+      border-color: rgba(168,85,247,0.5);
+      transform: scale(1.02);
+    }
+    .ability-menu-row:active:not(.ability-on-cooldown) { transform: scale(0.98); }
+    .ability-on-cooldown {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .ability-menu-key {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: rgba(168,85,247,0.25);
+      border: 1px solid rgba(168,85,247,0.5);
+      color: #d8b4fe;
+      font-size: 0.85rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .ability-menu-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ability-menu-label {
+      flex: 1;
+      text-align: left;
+      color: #d8ecff;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .ability-menu-cd {
+      color: #ff6b6b;
+      font-size: 0.8rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .ability-menu-ready {
+      color: #7dff7d;
+      font-size: 0.8rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    #abilities-menu-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .abilities-menu-btn {
+      padding: 10px 24px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      border: 2px solid #a855f7;
+      border-radius: 8px;
+      background: transparent;
+      color: #a855f7;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .abilities-menu-btn:hover { background: rgba(168,85,247,0.15); transform: scale(1.03); }
+    .abilities-menu-btn:active { transform: scale(0.97); }
+    .abilities-menu-btn.use-all {
+      border-color: #7dff7d;
+      color: #7dff7d;
+    }
+    .abilities-menu-btn.use-all:hover { background: rgba(125,255,125,0.12); }
+    .abilities-menu-hint {
+      color: rgba(255,255,255,0.35);
+      font-size: 0.75rem;
+      margin-top: 12px;
+    }
   </style>
 </head>
 <body>
@@ -439,6 +701,7 @@
   </div>
 
   <!-- In-game HUD -->
+  <div id="ap-hud">AP: <span id="ap-value">0</span></div>
   <div id="score-hud">Score: <span id="score-value">0</span></div>
   <div id="lives-hud"><span id="lives-value">20</span></div>
   <div id="level-hud">
@@ -451,7 +714,7 @@
       <li class="powerup-empty">No active power-ups</li>
     </ul>
   </div>
-  <div id="controls-hint">&larr; &rarr; Move &nbsp;&nbsp; &uarr; / W Piercing Shot &nbsp;&nbsp; &darr; / S Shop</div>
+  <div id="controls-hint">&larr; &rarr; Move &nbsp;&nbsp; &uarr; / W Piercing Shot &nbsp;&nbsp; &darr; / S Shop &nbsp;&nbsp; Space Abilities</div>
 
   <!-- Boss Warning -->
   <div id="boss-warning">BOSS INCOMING</div>
@@ -472,6 +735,30 @@
       <div id="shop-items"></div>
       <button id="shop-close-btn">Resume</button>
       <p class="shop-hint">Press &darr; or S to close</p>
+    </div>
+  </div>
+
+  <!-- Ability Shop Overlay -->
+  <div id="ability-shop-overlay">
+    <div id="ability-shop-box">
+      <h1>Ability Shop</h1>
+      <p id="ability-shop-ap-display">AP: 0</p>
+      <p id="ability-shop-earned"></p>
+      <div id="ability-shop-items"></div>
+      <button id="ability-shop-continue">Continue</button>
+    </div>
+  </div>
+
+  <!-- Spacebar Abilities Menu -->
+  <div id="abilities-menu-overlay">
+    <div id="abilities-menu-box">
+      <h1>Abilities</h1>
+      <div id="abilities-menu-items"></div>
+      <div id="abilities-menu-actions">
+        <button class="abilities-menu-btn use-all" id="abilities-use-all-btn">Use All</button>
+        <button class="abilities-menu-btn" id="abilities-close-btn">Close</button>
+      </div>
+      <p class="abilities-menu-hint">Press number key to activate &middot; Space / Esc to close</p>
     </div>
   </div>
 

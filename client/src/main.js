@@ -13,8 +13,34 @@ import {
   showLevelComplete,
   showShop,
   hideShop,
+  updateAPHUD,
+  showAbilityShop,
+  hideAbilityShop,
+  refreshAbilityShop,
+  showAbilitiesMenu,
+  hideAbilitiesMenu,
 } from './ui.js';
-import { sendScore } from './network.js';
+import {
+  sendScore,
+  sendAwardAP,
+  sendPurchaseAbility,
+  sendUpgradeAbility,
+  onAbilityData,
+} from './network.js';
+import {
+  getAbilityPoints,
+  calculateLevelAP,
+  calculateGameOverAP,
+  awardAP,
+  getShopItems,
+  markPurchased,
+  markUpgraded,
+  hasAnyAbilities,
+  getAbilityMenuItems,
+  activateAbility,
+  activateAllReady,
+  resetCooldowns,
+} from './abilities.js';
 import {
   createCannon,
   setupControls,
@@ -63,6 +89,9 @@ let levelElapsed = 0;
 let powerupPickups = [];
 let gamePaused = false;
 let pausedAtTime = 0;
+let abilitiesMenuOpen = false;
+let abilityShopOpen = false;
+let lastAPScoreSnapshot = 0;
 
 const SHOP_ITEMS = [
   { id: 'rapid', label: 'Rapid Fire (12s)', cost: 200 },
@@ -89,13 +118,20 @@ async function startGame(username) {
     currentLevel = 1;
     levelState = 'playing';
     levelElapsed = 0;
+    lastAPScoreSnapshot = 0;
+    abilitiesMenuOpen = false;
+    abilityShopOpen = false;
+    resetCooldowns();
     updateScoreHUD(score);
     updateLivesHUD(lives);
     updateLevelHUD(currentLevel);
     updateLevelTimer(LEVEL_DURATION_MS / 1000);
     setLevelFireRateBoost(currentLevel);
     updatePowerupsHUD([]);
+    updateAPHUD(getAbilityPoints());
     hideBossWarning();
+    hideAbilityShop();
+    hideAbilitiesMenu();
 
     initScene();
     buildLane();
@@ -103,6 +139,19 @@ async function startGame(username) {
     createEnemyBase(scene);
     setupControls();
     setupShopControls();
+    setupAbilitiesControls();
+
+    onAbilityData(() => {
+      updateAPHUD(getAbilityPoints());
+      if (abilityShopOpen) {
+        refreshAbilityShop(
+          getAbilityPoints(),
+          getShopItems(),
+          handleAbilityBuy,
+          handleAbilityUpgrade,
+        );
+      }
+    });
 
     gamePaused = false;
     gameRunning = true;
@@ -348,11 +397,22 @@ function onLevelBossKilled() {
     resetUnits(scene);
   }, 400);
 
+  const earnedAP = calculateLevelAP(score - lastAPScoreSnapshot);
+  lastAPScoreSnapshot = score;
+
   showLevelComplete(currentLevel, () => {
-    levelState = 'powerup_select';
-    resetMobs(scene);
-    resetUnits(scene);
-    spawnPowerupPickups();
+    if (earnedAP > 0) {
+      awardAP(earnedAP);
+      sendAwardAP(earnedAP);
+      updateAPHUD(getAbilityPoints());
+    }
+
+    openAbilityShop(earnedAP, () => {
+      levelState = 'powerup_select';
+      resetMobs(scene);
+      resetUnits(scene);
+      spawnPowerupPickups();
+    });
   });
 }
 
@@ -379,11 +439,21 @@ function processMobsAtBase() {
 
   if (lives <= 0) {
     gameRunning = false;
+
+    const gameOverAP = calculateGameOverAP(score);
+    if (gameOverAP > 0) {
+      awardAP(gameOverAP);
+      sendAwardAP(gameOverAP);
+      updateAPHUD(getAbilityPoints());
+    }
+
     showGameOver(score, () => {
-      resetUnits(scene);
-      resetMobs(scene);
-      clearPowerupPickups();
-      startGame('');
+      openAbilityShop(gameOverAP, () => {
+        resetUnits(scene);
+        resetMobs(scene);
+        clearPowerupPickups();
+        startGame('');
+      });
     });
   }
 }
@@ -630,6 +700,7 @@ function setupShopControls() {
   shopControlsInitialized = true;
 
   document.addEventListener('keydown', (e) => {
+    if (abilitiesMenuOpen || abilityShopOpen) return;
     if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
       if (gamePaused) {
         closeShop();
@@ -644,6 +715,132 @@ function setupShopControls() {
 
   document.getElementById('shop-close-btn').addEventListener('click', () => {
     closeShop();
+  });
+}
+
+// ── Ability Shop ───────────────────────────────────────────
+
+function openAbilityShop(earnedAP, onContinue) {
+  abilityShopOpen = true;
+  gamePaused = true;
+  pausedAtTime = performance.now();
+
+  showAbilityShop(
+    getAbilityPoints(),
+    earnedAP,
+    getShopItems(),
+    handleAbilityBuy,
+    handleAbilityUpgrade,
+    () => {
+      abilityShopOpen = false;
+      gamePaused = false;
+      const pauseDuration = performance.now() - pausedAtTime;
+      lastTime += pauseDuration;
+      if (onContinue) onContinue();
+    },
+  );
+}
+
+function handleAbilityBuy(abilityId) {
+  markPurchased(abilityId);
+  sendPurchaseAbility(abilityId);
+  updateAPHUD(getAbilityPoints());
+  refreshAbilityShop(
+    getAbilityPoints(),
+    getShopItems(),
+    handleAbilityBuy,
+    handleAbilityUpgrade,
+  );
+}
+
+function handleAbilityUpgrade(abilityId) {
+  markUpgraded(abilityId);
+  sendUpgradeAbility(abilityId);
+  updateAPHUD(getAbilityPoints());
+  refreshAbilityShop(
+    getAbilityPoints(),
+    getShopItems(),
+    handleAbilityBuy,
+    handleAbilityUpgrade,
+  );
+}
+
+// ── Spacebar Abilities Menu ────────────────────────────────
+
+function openAbilitiesMenu() {
+  if (gamePaused || !gameRunning) return;
+  if (levelState !== 'playing' && levelState !== 'boss_warning' && levelState !== 'boss_fight') return;
+  if (!hasAnyAbilities()) return;
+
+  abilitiesMenuOpen = true;
+  gamePaused = true;
+  pausedAtTime = performance.now();
+
+  showAbilitiesMenu(
+    getAbilityMenuItems(),
+    (abilityId) => {
+      const addLife = () => {
+        lives = Math.min(lives + 1, MAX_LIVES);
+        updateLivesHUD(lives);
+      };
+      activateAbility(abilityId, addLife);
+      closeAbilitiesMenu();
+    },
+    () => {
+      const addLife = () => {
+        lives = Math.min(lives + 1, MAX_LIVES);
+        updateLivesHUD(lives);
+      };
+      activateAllReady(addLife);
+      closeAbilitiesMenu();
+    },
+    () => {
+      closeAbilitiesMenu();
+    },
+  );
+}
+
+function closeAbilitiesMenu() {
+  if (!abilitiesMenuOpen) return;
+  abilitiesMenuOpen = false;
+  gamePaused = false;
+  hideAbilitiesMenu();
+  const pauseDuration = performance.now() - pausedAtTime;
+  lastTime += pauseDuration;
+}
+
+let abilitiesControlsInitialized = false;
+function setupAbilitiesControls() {
+  if (abilitiesControlsInitialized) return;
+  abilitiesControlsInitialized = true;
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (abilitiesMenuOpen) {
+        closeAbilitiesMenu();
+      } else if (!abilityShopOpen) {
+        openAbilitiesMenu();
+      }
+    }
+
+    if (abilitiesMenuOpen && e.key >= '1' && e.key <= '9') {
+      const menuItems = getAbilityMenuItems();
+      const index = parseInt(e.key, 10);
+      const item = menuItems.find(m => m.index === index);
+      if (item && !item.onCooldown) {
+        const addLife = () => {
+          lives = Math.min(lives + 1, MAX_LIVES);
+          updateLivesHUD(lives);
+        };
+        activateAbility(item.id, addLife);
+        closeAbilitiesMenu();
+      }
+    }
+
+    if (e.key === 'Escape' && abilitiesMenuOpen) {
+      closeAbilitiesMenu();
+    }
   });
 }
 

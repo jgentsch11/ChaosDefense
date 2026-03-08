@@ -20,6 +20,7 @@ export function initUI(onPlay) {
     document.getElementById('powerups-hud').style.display = 'block';
     document.getElementById('leaderboard').style.display = 'block';
     document.getElementById('controls-hint').style.display = 'block';
+    document.getElementById('ap-hud').style.display = 'block';
 
     connect(username);
     if (onPlayCallback) onPlayCallback(username);
@@ -192,4 +193,222 @@ export function showGameOver(finalScore, onRetry) {
     if (onRetry) onRetry();
   };
   retryBtn.addEventListener('click', handler);
+}
+
+// ── AP HUD ────────────────────────────────────────────────
+
+export function updateAPHUD(ap) {
+  const el = document.getElementById('ap-value');
+  if (el) el.textContent = ap.toLocaleString();
+}
+
+// ── Ability Shop Overlay ──────────────────────────────────
+
+export function showAbilityShop(ap, earnedAP, shopItems, onBuy, onUpgrade, onContinue) {
+  const overlay = document.getElementById('ability-shop-overlay');
+  const apDisplay = document.getElementById('ability-shop-ap-display');
+  const earnedEl = document.getElementById('ability-shop-earned');
+  const container = document.getElementById('ability-shop-items');
+  const continueBtn = document.getElementById('ability-shop-continue');
+
+  apDisplay.textContent = `AP: ${ap.toLocaleString()}`;
+  earnedEl.textContent = earnedAP > 0 ? `+${earnedAP.toLocaleString()} AP earned!` : '';
+  container.innerHTML = '';
+
+  for (const item of shopItems) {
+    const row = document.createElement('div');
+    row.className = 'ability-shop-row' + (item.owned ? ' owned' : '');
+
+    const dot = document.createElement('div');
+    dot.className = 'ability-shop-dot';
+    dot.style.background = item.color;
+    row.appendChild(dot);
+
+    const info = document.createElement('div');
+    info.className = 'ability-shop-info';
+
+    const name = document.createElement('span');
+    name.className = 'ability-shop-name';
+    name.textContent = item.label;
+    info.appendChild(name);
+
+    const detail = document.createElement('span');
+    detail.className = 'ability-shop-detail';
+    if (item.owned) {
+      detail.textContent = `Lvl ${item.upgradeLevel}/${item.maxUpgradeLevel} · CD: ${item.cooldownSec}s`;
+    } else {
+      detail.textContent = `Cost: ${item.purchaseCost} AP`;
+    }
+    info.appendChild(detail);
+    row.appendChild(info);
+
+    if (!item.owned) {
+      const buyBtn = document.createElement('button');
+      buyBtn.className = 'ability-shop-btn';
+      buyBtn.textContent = `Buy ${item.purchaseCost}`;
+      buyBtn.disabled = !item.canBuy;
+      buyBtn.addEventListener('click', () => {
+        onBuy(item.id);
+      });
+      row.appendChild(buyBtn);
+    } else if (item.maxed) {
+      const maxLabel = document.createElement('span');
+      maxLabel.className = 'ability-shop-maxed';
+      maxLabel.textContent = 'MAX';
+      row.appendChild(maxLabel);
+    } else {
+      const upgradeBtn = document.createElement('button');
+      upgradeBtn.className = 'ability-shop-btn';
+      upgradeBtn.textContent = `Upgrade ${item.upgradeCost}`;
+      upgradeBtn.disabled = !item.canUpgrade;
+      upgradeBtn.addEventListener('click', () => {
+        onUpgrade(item.id);
+      });
+      row.appendChild(upgradeBtn);
+    }
+
+    container.appendChild(row);
+  }
+
+  const newContinueBtn = continueBtn.cloneNode(true);
+  continueBtn.parentNode.replaceChild(newContinueBtn, continueBtn);
+  newContinueBtn.addEventListener('click', () => {
+    overlay.style.display = 'none';
+    if (onContinue) onContinue();
+  });
+
+  overlay.style.display = 'flex';
+}
+
+export function hideAbilityShop() {
+  const overlay = document.getElementById('ability-shop-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+export function refreshAbilityShop(ap, shopItems, onBuy, onUpgrade) {
+  const apDisplay = document.getElementById('ability-shop-ap-display');
+  const container = document.getElementById('ability-shop-items');
+
+  if (apDisplay) apDisplay.textContent = `AP: ${ap.toLocaleString()}`;
+  if (!container) return;
+
+  container.innerHTML = '';
+  for (const item of shopItems) {
+    const row = document.createElement('div');
+    row.className = 'ability-shop-row' + (item.owned ? ' owned' : '');
+
+    const dot = document.createElement('div');
+    dot.className = 'ability-shop-dot';
+    dot.style.background = item.color;
+    row.appendChild(dot);
+
+    const info = document.createElement('div');
+    info.className = 'ability-shop-info';
+
+    const name = document.createElement('span');
+    name.className = 'ability-shop-name';
+    name.textContent = item.label;
+    info.appendChild(name);
+
+    const detail = document.createElement('span');
+    detail.className = 'ability-shop-detail';
+    if (item.owned) {
+      detail.textContent = `Lvl ${item.upgradeLevel}/${item.maxUpgradeLevel} · CD: ${item.cooldownSec}s`;
+    } else {
+      detail.textContent = `Cost: ${item.purchaseCost} AP`;
+    }
+    info.appendChild(detail);
+    row.appendChild(info);
+
+    if (!item.owned) {
+      const buyBtn = document.createElement('button');
+      buyBtn.className = 'ability-shop-btn';
+      buyBtn.textContent = `Buy ${item.purchaseCost}`;
+      buyBtn.disabled = !item.canBuy;
+      buyBtn.addEventListener('click', () => {
+        onBuy(item.id);
+      });
+      row.appendChild(buyBtn);
+    } else if (item.maxed) {
+      const maxLabel = document.createElement('span');
+      maxLabel.className = 'ability-shop-maxed';
+      maxLabel.textContent = 'MAX';
+      row.appendChild(maxLabel);
+    } else {
+      const upgradeBtn = document.createElement('button');
+      upgradeBtn.className = 'ability-shop-btn';
+      upgradeBtn.textContent = `Upgrade ${item.upgradeCost}`;
+      upgradeBtn.disabled = !item.canUpgrade;
+      upgradeBtn.addEventListener('click', () => {
+        onUpgrade(item.id);
+      });
+      row.appendChild(upgradeBtn);
+    }
+
+    container.appendChild(row);
+  }
+}
+
+// ── Spacebar Abilities Menu ───────────────────────────────
+
+export function showAbilitiesMenu(menuItems, onActivate, onUseAll, onClose) {
+  const overlay = document.getElementById('abilities-menu-overlay');
+  const container = document.getElementById('abilities-menu-items');
+  const useAllBtn = document.getElementById('abilities-use-all-btn');
+  const closeBtn = document.getElementById('abilities-close-btn');
+
+  container.innerHTML = '';
+
+  for (const item of menuItems) {
+    const row = document.createElement('div');
+    row.className = 'ability-menu-row' + (item.onCooldown ? ' ability-on-cooldown' : '');
+
+    const key = document.createElement('div');
+    key.className = 'ability-menu-key';
+    key.textContent = String(item.index);
+    row.appendChild(key);
+
+    const dot = document.createElement('div');
+    dot.className = 'ability-menu-dot';
+    dot.style.background = item.color;
+    row.appendChild(dot);
+
+    const label = document.createElement('span');
+    label.className = 'ability-menu-label';
+    label.textContent = item.label;
+    row.appendChild(label);
+
+    if (item.onCooldown) {
+      const cd = document.createElement('span');
+      cd.className = 'ability-menu-cd';
+      cd.textContent = `${item.remainingCooldown}s`;
+      row.appendChild(cd);
+    } else {
+      const ready = document.createElement('span');
+      ready.className = 'ability-menu-ready';
+      ready.textContent = 'READY';
+      row.appendChild(ready);
+    }
+
+    if (!item.onCooldown) {
+      row.addEventListener('click', () => onActivate(item.id));
+    }
+
+    container.appendChild(row);
+  }
+
+  const newUseAll = useAllBtn.cloneNode(true);
+  useAllBtn.parentNode.replaceChild(newUseAll, useAllBtn);
+  newUseAll.addEventListener('click', () => onUseAll());
+
+  const newClose = closeBtn.cloneNode(true);
+  closeBtn.parentNode.replaceChild(newClose, closeBtn);
+  newClose.addEventListener('click', () => onClose());
+
+  overlay.style.display = 'flex';
+}
+
+export function hideAbilitiesMenu() {
+  const overlay = document.getElementById('abilities-menu-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
